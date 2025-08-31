@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doomscroll Detox</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="popup-container">
+        <header class="popup-header">
+            <h1>🧘‍♀️ Doomscroll Detox</h1>
+            <p class="subtitle">Break free from endless scrolling</p>
+        </header>
+        
+        <main class="popup-main">
+            <div class="stats-section">
+                <div class="stat-card">
+                    <h3>Today's Usage</h3>
+                    <div class="stat-value" id="today-usage">0m</div>
+                    <div class="stat-label">of <span id="daily-limit">30m</span> daily limit</div>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h3>Settings</h3>
+                
+                <div class="setting-item">
+                    <label for="daily-limit-input">Daily Limit (minutes):</label>
+                    <input type="number" id="daily-limit-input" min="5" max="480" value="30">
+                </div>
+                
+                <div class="setting-item">
+                    <label for="break-reminder-input">Break Reminder (minutes):</label>
+                    <input type="number" id="break-reminder-input" min="5" max="60" value="15">
+                </div>
+                
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="enabled-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        Extension Enabled
+                    </label>
+                </div>
+            </div>
+            
+            <div class="actions-section">
+                <button id="save-settings" class="btn-primary">Save Settings</button>
+                <button id="reset-today" class="btn-secondary">Reset Today's Usage</button>
+            </div>
+        </main>
+        
+        <footer class="popup-footer">
+            <p>Take control of your digital wellbeing</p>
+        </footer>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
