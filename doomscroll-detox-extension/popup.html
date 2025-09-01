@@ -54,6 +54,23 @@
                         Focus Mode (30s alerts)
                     </label>
                 </div>
+                
+                <div class="setting-item">
+                    <label for="focus-sensitivity">Focus Mode Sensitivity:</label>
+                    <select id="focus-sensitivity">
+                        <option value="low">Low (60s)</option>
+                        <option value="medium" selected>Medium (30s)</option>
+                        <option value="high">High (15s)</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="overlay-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        Show Overlays (alerts + suggestions)
+                    </label>
+                </div>
             </div>
             
             <div class="website-section">
@@ -67,6 +84,11 @@
                 <div class="add-website">
                     <input type="text" id="new-website-input" placeholder="Enter website (e.g., youtube.com)" />
                     <button id="add-website-btn" class="btn-secondary">Add Website</button>
+                </div>
+                
+                <div class="quick-actions">
+                    <button id="add-current-site" class="btn-secondary">Add Current Site</button>
+                    <button id="block-current-site" class="btn-secondary">Block Current Site</button>
                 </div>
             </div>
             

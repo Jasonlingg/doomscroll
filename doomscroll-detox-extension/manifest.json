@@ -22,15 +22,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.facebook.com/*",
-        "*://*.twitter.com/*",
-        "*://*.x.com/*",
-        "*://*.youtube.com/*",
-        "*://*.instagram.com/*",
-        "*://*.tiktok.com/*",
-        "*://*.reddit.com/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "css": ["styles.css"]
     }

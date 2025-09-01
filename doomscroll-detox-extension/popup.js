@@ -59,27 +59,43 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Add website button event listener added');
     }
     
+    const addCurrentSiteBtn = document.getElementById('add-current-site');
+    if (addCurrentSiteBtn) {
+        addCurrentSiteBtn.addEventListener('click', addCurrentSite);
+        console.log('✅ Add current site button event listener added');
+    }
+    
+    const blockCurrentSiteBtn = document.getElementById('block-current-site');
+    if (blockCurrentSiteBtn) {
+        blockCurrentSiteBtn.addEventListener('click', blockCurrentSite);
+        console.log('✅ Block current site button event listener added');
+    }
+    
     console.log('✅ Event listeners setup complete');
 });
 
 // Load current settings from storage
 function loadSettings() {
   console.log('📂 Loading settings from storage...');
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled', 'focusMode', 'monitoredWebsites'], (result) => {
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
     console.log('📥 Retrieved settings from storage:', result);
     
     const dailyLimit = result.dailyLimit || 30;
     const breakReminder = result.breakReminder || 15;
     const enabled = result.enabled !== false; // Default to true
     const focusMode = result.focusMode || false;
+    const focusSensitivity = result.focusSensitivity || 'medium';
+    const showOverlays = result.showOverlays !== false; // Default to true
     const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
     
-    console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled, focusMode, monitoredWebsites });
+    console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays, monitoredWebsites });
     
     document.getElementById('daily-limit-input').value = dailyLimit;
     document.getElementById('break-reminder-input').value = breakReminder;
     document.getElementById('enabled-toggle').checked = enabled;
     document.getElementById('focus-mode-toggle').checked = focusMode;
+    document.getElementById('focus-sensitivity').value = focusSensitivity;
+    document.getElementById('overlay-toggle').checked = showOverlays;
     
     // Update display
     document.getElementById('daily-limit').textContent = dailyLimit + 'm';
@@ -149,8 +165,10 @@ function saveSettings() {
   const breakReminder = parseInt(document.getElementById('break-reminder-input').value);
   const enabled = document.getElementById('enabled-toggle').checked;
   const focusMode = document.getElementById('focus-mode-toggle').checked;
+  const focusSensitivity = document.getElementById('focus-sensitivity').value;
+  const showOverlays = document.getElementById('overlay-toggle').checked;
   
-  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode });
+  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays });
   
   // Validate inputs
   if (dailyLimit < 5 || dailyLimit > 480) {
@@ -177,6 +195,8 @@ function saveSettings() {
       breakReminder: breakReminder,
       enabled: enabled,
       focusMode: focusMode,
+      focusSensitivity: focusSensitivity,
+      showOverlays: showOverlays,
       monitoredWebsites: monitoredWebsites
     }, () => {
       console.log('✅ Settings saved to storage successfully');
@@ -194,7 +214,7 @@ function saveSettings() {
             console.log('📨 Sending settings update to:', tab.url);
             chrome.tabs.sendMessage(tab.id, {
               action: 'settingsUpdated',
-              settings: { dailyLimit, breakReminder, enabled, focusMode }
+              settings: { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays }
             });
           }
         });
@@ -500,3 +520,70 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Add current site to monitored websites
+function addCurrentSite() {
+    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs[0] && tabs[0].url) {
+            const url = new URL(tabs[0].url);
+            const domain = url.hostname;
+            
+            chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+                const websites = result.monitoredWebsites || getDefaultWebsites();
+                
+                // Check if already exists
+                if (websites.some(site => site.domain === domain)) {
+                    showMessage('Site already monitored!', 'info');
+                    return;
+                }
+                
+                // Add new site
+                websites.push({
+                    domain: domain,
+                    enabled: true,
+                    name: domain
+                });
+                
+                chrome.storage.sync.set({monitoredWebsites: websites}, () => {
+                    if (chrome.runtime.lastError) {
+                        showMessage('Failed to add site', 'error');
+                    } else {
+                        showMessage(`Added ${domain} to monitored sites!`, 'success');
+                        loadWebsiteList(websites);
+                    }
+                });
+            });
+        }
+    });
+}
+
+// Block current site (remove from monitored)
+function blockCurrentSite() {
+    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs[0] && tabs[0].url) {
+            const url = new URL(tabs[0].url);
+            const domain = url.hostname;
+            
+            chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+                const websites = result.monitoredWebsites || getDefaultWebsites();
+                
+                // Find and disable the site
+                const siteIndex = websites.findIndex(site => site.domain === domain);
+                if (siteIndex !== -1) {
+                    websites[siteIndex].enabled = false;
+                    
+                    chrome.storage.sync.set({monitoredWebsites: websites}, () => {
+                        if (chrome.runtime.lastError) {
+                            showMessage('Failed to block site', 'error');
+                        } else {
+                            showMessage(`Blocked ${domain}!`, 'success');
+                            loadWebsiteList(websites);
+                        }
+                    });
+                } else {
+                    showMessage('Site not found in monitored list', 'info');
+                }
+            });
+        }
+    });
+}

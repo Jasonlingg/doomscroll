@@ -23,16 +23,20 @@ chrome.runtime.onInstalled.addListener(() => {
     dailyLimit: 30, // minutes
     breakReminder: 15, // minutes
     focusMode: false, // focus mode disabled by default
+    focusSensitivity: 'medium', // medium sensitivity by default
+    showOverlays: true, // show overlays by default
     monitoredWebsites: defaultWebsites,
-    lastReset: Date.now()
+    lastReset: Date.now(),
+    // Privacy defaults - OFF by default for sensitive features
+    featureFlags: {
+      screenCapture: false, // No screen capture
+      audioCapture: false, // No audio capture
+      keystrokeTracking: false, // No keystroke tracking
+      contentAnalysis: false, // No content analysis
+      analytics: false // No analytics
+    }
   }, () => {
-    console.log('✅ Default settings initialized:', {
-      enabled: true,
-      dailyLimit: 30,
-      breakReminder: 15,
-      focusMode: false,
-      monitoredWebsites: defaultWebsites
-    });
+    console.log('✅ Default settings initialized with privacy defaults');
   });
 });
 

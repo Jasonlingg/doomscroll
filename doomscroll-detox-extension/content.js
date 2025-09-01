@@ -8,18 +8,50 @@ let focusModeActive = false;
 let focusModeTimer = null;
 let focusModeAlertShown = false;
 
+// Focus mode state management
+let focusModeState = {
+  lastAlertTime: 0,
+  alertCooldown: 30000, // 30 seconds between alerts per domain
+  isIdle: false,
+  idleTimeout: null
+};
+
+// Settings state
+let currentSettings = {
+  dailyLimit: 30,
+  breakReminder: 15,
+  enabled: true,
+  focusMode: false,
+  focusSensitivity: 'medium',
+  showOverlays: true
+};
+
 // Initialize content script
 function init() {
   console.log('🌐 Content script initializing on:', window.location.hostname);
   
+  // Add error handling for chrome.storage
+  if (!chrome.storage) {
+    console.error('❌ Chrome storage API not available');
+    return;
+  }
+  
   // Get current daily usage from storage
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'monitoredWebsites'], (result) => {
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
     const dailyLimit = result.dailyLimit || 30;
     const breakReminder = result.breakReminder || 15;
     const focusMode = result.focusMode || false;
+    const focusSensitivity = result.focusSensitivity || 'medium';
+    const showOverlays = result.showOverlays !== false; // Default to true
     const monitoredWebsites = result.monitoredWebsites || [];
     
-    console.log('🚀 Initializing content script with settings:', { dailyLimit, breakReminder, focusMode });
+    // Update current settings
+    currentSettings = { dailyLimit, breakReminder, enabled: true, focusMode, focusSensitivity, showOverlays };
+    
+    // Update focus mode cooldown based on sensitivity
+    updateFocusModeSensitivity(focusSensitivity);
+    
+    console.log('🚀 Initializing content script with settings:', currentSettings);
     console.log('📋 Monitored websites:', monitoredWebsites);
     
     // Check if current site is monitored
@@ -151,28 +183,97 @@ function addUsageIndicator() {
     font-size: 14px;
     font-weight: bold;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    cursor: move;
+    user-select: none;
   `;
+  
+  // Make it draggable
+  makeDraggable(indicator);
   
   document.body.appendChild(indicator);
 }
 
-// Update usage indicator
+// Update usage indicator with performance optimizations
 function updateUsageIndicator(timeSpent, dailyLimit) {
   const indicator = document.getElementById('doomscroll-indicator');
-  if (indicator) {
-    const timeElement = indicator.querySelector('.time-spent');
-    const limitElement = indicator.querySelector('.daily-limit');
+  if (!indicator) return;
+  
+  // Batch DOM updates to avoid excessive reflows
+  const updates = [];
+  
+  const timeElement = indicator.querySelector('.time-spent');
+  const limitElement = indicator.querySelector('.daily-limit');
+  
+  if (timeElement && timeElement.textContent !== `${timeSpent}m`) {
+    updates.push(() => timeElement.textContent = `${timeSpent}m`);
+  }
+  
+  if (limitElement && limitElement.textContent !== `/${dailyLimit}m`) {
+    updates.push(() => limitElement.textContent = `/${dailyLimit}m`);
+  }
+  
+  // Determine new background color
+  let newBackground = 'rgba(0, 0, 0, 0.8)'; // Default
+  if (timeSpent >= dailyLimit) {
+    newBackground = 'rgba(255, 0, 0, 0.9)'; // Red
+  } else if (timeSpent >= dailyLimit * 0.8) {
+    newBackground = 'rgba(255, 165, 0, 0.9)'; // Orange
+  }
+  
+  // Only update background if it changed
+  if (indicator.style.background !== newBackground) {
+    updates.push(() => indicator.style.background = newBackground);
+  }
+  
+  // Batch all updates in one frame
+  if (updates.length > 0) {
+    requestAnimationFrame(() => {
+      updates.forEach(update => update());
+    });
+  }
+}
+
+// Simple draggable function
+function makeDraggable(element) {
+  let isDragging = false;
+  let currentX;
+  let currentY;
+  let initialX;
+  let initialY;
+  let xOffset = 0;
+  let yOffset = 0;
+
+  element.addEventListener('mousedown', dragStart);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', dragEnd);
+
+  function dragStart(e) {
+    initialX = e.clientX - xOffset;
+    initialY = e.clientY - yOffset;
     
-    if (timeElement) timeElement.textContent = `${timeSpent}m`;
-    if (limitElement) limitElement.textContent = `/${dailyLimit}m`;
-    
-    // Change color based on usage
-    if (timeSpent >= dailyLimit * 0.8) {
-      indicator.style.background = 'rgba(255, 165, 0, 0.9)'; // Orange
+    if (e.target === element || element.contains(e.target)) {
+      isDragging = true;
     }
-    if (timeSpent >= dailyLimit) {
-      indicator.style.background = 'rgba(255, 0, 0, 0.9)'; // Red
+  }
+
+  function drag(e) {
+    if (isDragging) {
+      e.preventDefault();
+      
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+      
+      xOffset = currentX;
+      yOffset = currentY;
+      
+      element.style.transform = `translate(${currentX}px, ${currentY}px)`;
     }
+  }
+
+  function dragEnd() {
+    initialX = currentX;
+    initialY = currentY;
+    isDragging = false;
   }
 }
 
@@ -328,24 +429,66 @@ function handleMessage(request, sender, sendResponse) {
       console.log('✅ Event listeners removed');
     }
   }
+  
+  if (request.action === 'settingsUpdated') {
+    console.log('⚙️ Settings updated:', request.settings);
+    
+    // Update current settings
+    if (request.settings.focusSensitivity) {
+      currentSettings.focusSensitivity = request.settings.focusSensitivity;
+      updateFocusModeSensitivity(request.settings.focusSensitivity);
+    }
+    
+    if (request.settings.showOverlays !== undefined) {
+      currentSettings.showOverlays = request.settings.showOverlays;
+    }
+    
+    if (request.settings.focusMode !== undefined) {
+      currentSettings.focusMode = request.settings.focusMode;
+      if (request.settings.focusMode) {
+        startFocusMode();
+      } else {
+        stopFocusMode();
+      }
+    }
+    
+    console.log('✅ Settings updated successfully');
+  }
 }
 
-// Focus mode functions
+// Focus mode functions with improved stability
 function startFocusMode() {
   console.log('🎯 Starting focus mode...');
   focusModeActive = true;
   focusModeAlertShown = false;
+  focusModeState.lastAlertTime = 0;
+  
+  // Clear any existing timers
+  if (focusModeTimer) {
+    clearTimeout(focusModeTimer);
+    focusModeTimer = null;
+  }
+  
   startFocusModeTimer();
+  startIdleDetection();
 }
 
 function stopFocusMode() {
   console.log('⏹️ Stopping focus mode...');
   focusModeActive = false;
+  
   if (focusModeTimer) {
     clearTimeout(focusModeTimer);
     focusModeTimer = null;
   }
+  
+  if (focusModeState.idleTimeout) {
+    clearTimeout(focusModeState.idleTimeout);
+    focusModeState.idleTimeout = null;
+  }
+  
   focusModeAlertShown = false;
+  focusModeState.isIdle = false;
 }
 
 function startFocusModeTimer() {
@@ -353,28 +496,80 @@ function startFocusModeTimer() {
     clearTimeout(focusModeTimer);
   }
   
-  console.log('⏰ Starting 30-second focus mode timer...');
+  // Get timer duration from current settings
+  let timerDuration = 30000; // Default 30 seconds
+  switch (currentSettings.focusSensitivity) {
+    case 'low':
+      timerDuration = 60000; // 60 seconds
+      break;
+    case 'medium':
+      timerDuration = 30000; // 30 seconds
+      break;
+    case 'high':
+      timerDuration = 15000; // 15 seconds
+      break;
+  }
+  
+  console.log(`⏰ Starting focus mode timer for ${timerDuration/1000}s...`);
   focusModeTimer = setTimeout(() => {
-    if (focusModeActive && !focusModeAlertShown) {
+    if (focusModeActive && !focusModeAlertShown && !focusModeState.isIdle) {
       showFocusModeAlert();
     }
-  }, 30000); // 30 seconds
+  }, timerDuration);
+}
+
+function startIdleDetection() {
+  // Reset idle state
+  focusModeState.isIdle = false;
+  
+  // Clear existing timeout
+  if (focusModeState.idleTimeout) {
+    clearTimeout(focusModeState.idleTimeout);
+  }
+  
+  // Set new idle timeout (5 minutes)
+  focusModeState.idleTimeout = setTimeout(() => {
+    focusModeState.isIdle = true;
+    console.log('😴 User marked as idle, pausing focus mode');
+  }, 300000); // 5 minutes
 }
 
 function showFocusModeAlert() {
+  const currentTime = Date.now();
+  const currentDomain = window.location.hostname;
+  
+  // Check if we should show alert (debouncing per domain)
+  if (currentTime - focusModeState.lastAlertTime < focusModeState.alertCooldown) {
+    console.log('⏳ Alert cooldown active, skipping...');
+    return;
+  }
+  
+  // Check if overlays are disabled
+  if (!currentSettings.showOverlays) {
+    console.log('🚫 Overlays disabled, showing toast instead');
+    showToastMessage('Focus Mode: Time to check if you\'re being productive!', 'warning');
+    return;
+  }
+  
   console.log('🚨 Showing focus mode alert!');
   focusModeAlertShown = true;
+  focusModeState.lastAlertTime = currentTime;
+  
+  // Detect content type for better messaging
+  const contentType = detectContentType();
+  const alertMessage = getContentTypeMessage(contentType);
   
   const alert = document.createElement('div');
   alert.id = 'focus-mode-alert';
   alert.innerHTML = `
     <div class="focus-alert-content">
       <h3>🚨 Focus Mode Alert!</h3>
-      <p>You've been on this social media site for 30 seconds.</p>
+      <p>${alertMessage}</p>
       <p><strong>Are you being productive?</strong></p>
       <div class="focus-alert-buttons">
         <button id="yes-productive" class="btn-focus-yes">Yes, I'm being productive</button>
         <button id="no-productive" class="btn-focus-no">No, I'm being unproductive</button>
+        <button id="snooze-alert" class="btn-focus-snooze">Snooze 5 min</button>
       </div>
     </div>
   `;
@@ -413,6 +608,182 @@ function showFocusModeAlert() {
     // Show motivational message and suggest alternatives
     showProductivitySuggestion();
   });
+  
+  document.getElementById('snooze-alert').addEventListener('click', () => {
+    console.log('⏰ User snoozed alert for 5 minutes');
+    alert.remove();
+    // Snooze for 5 minutes
+    setTimeout(() => {
+      focusModeAlertShown = false;
+      startFocusModeTimer();
+    }, 300000); // 5 minutes
+  });
+}
+
+// Detect content type for better focus mode messaging
+function detectContentType() {
+  const url = window.location.href;
+  const hostname = window.location.hostname;
+  
+  if (hostname.includes('youtube.com') && url.includes('/shorts/')) {
+    return 'youtube-shorts';
+  } else if (hostname.includes('tiktok.com')) {
+    return 'tiktok';
+  } else if (hostname.includes('instagram.com') && url.includes('/reels/')) {
+    return 'instagram-reels';
+  } else if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
+    return 'twitter-feed';
+  } else if (hostname.includes('reddit.com')) {
+    return 'reddit-feed';
+  } else if (hostname.includes('facebook.com')) {
+    return 'facebook-feed';
+  }
+  
+  return 'general';
+}
+
+// Get appropriate message based on content type
+function getContentTypeMessage(contentType) {
+  const messages = {
+    'youtube-shorts': 'You\'ve been watching YouTube Shorts for 30 seconds.',
+    'tiktok': 'You\'ve been scrolling TikTok for 30 seconds.',
+    'instagram-reels': 'You\'ve been watching Instagram Reels for 30 seconds.',
+    'twitter-feed': 'You\'ve been scrolling Twitter/X for 30 seconds.',
+    'reddit-feed': 'You\'ve been browsing Reddit for 30 seconds.',
+    'facebook-feed': 'You\'ve been scrolling Facebook for 30 seconds.',
+    'general': 'You\'ve been on this social media site for 30 seconds.'
+  };
+  
+  return messages[contentType] || messages.general;
+}
+
+// Update focus mode sensitivity
+function updateFocusModeSensitivity(sensitivity) {
+  switch (sensitivity) {
+    case 'low':
+      focusModeState.alertCooldown = 60000; // 60 seconds
+      break;
+    case 'medium':
+      focusModeState.alertCooldown = 30000; // 30 seconds
+      break;
+    case 'high':
+      focusModeState.alertCooldown = 15000; // 15 seconds
+      break;
+    default:
+      focusModeState.alertCooldown = 30000; // Default to medium
+  }
+  
+  console.log(`🎯 Focus mode sensitivity set to ${sensitivity} (${focusModeState.alertCooldown/1000}s cooldown)`);
+}
+
+// Privacy notice - shows what data is NOT collected
+function showPrivacyNotice() {
+  const notice = document.createElement('div');
+  notice.id = 'privacy-notice';
+  notice.innerHTML = `
+    <div class="privacy-content">
+      <h4>🔒 Privacy Notice</h4>
+      <p>This extension <strong>does NOT</strong> collect:</p>
+      <ul>
+        <li>📱 Screen content or screenshots</li>
+        <li>🎤 Audio or microphone data</li>
+        <li>⌨️ Keystrokes or typing</li>
+        <li>📄 Page content or text</li>
+        <li>📊 Personal browsing analytics</li>
+      </ul>
+      <p><strong>Only collects:</strong> Domain names and time spent for usage tracking.</p>
+      <button id="close-privacy-notice">Got it</button>
+    </div>
+  `;
+  
+  // Style the notice
+  notice.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 10005;
+    background: rgba(0, 0, 0, 0.95);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    max-width: 300px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  `;
+  
+  document.body.appendChild(notice);
+  
+  // Add close functionality
+  document.getElementById('close-privacy-notice').addEventListener('click', () => {
+    notice.remove();
+  });
+  
+  // Auto-remove after 10 seconds
+  setTimeout(() => {
+    if (notice.parentNode) {
+      notice.remove();
+    }
+  }, 10000);
+}
+
+// Show toast message when overlays are disabled
+function showToastMessage(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.id = 'doomscroll-toast';
+  toast.textContent = message;
+  
+  // Style the toast
+  const colors = {
+    info: '#2196f3',
+    warning: '#ff9800',
+    success: '#4caf50',
+    error: '#f44336'
+  };
+  
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10004;
+    background: ${colors[type] || colors.info};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 300px;
+    word-wrap: break-word;
+    animation: slideInRight 0.3s ease-out;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  // Auto-remove after 4 seconds
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.animation = 'slideOutRight 0.3s ease-in';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 4000);
+  
+  // Add CSS animations
+  if (!document.getElementById('toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animations';
+    style.textContent = `
+      @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
 
 function showProductivitySuggestion() {
