@@ -188,7 +188,10 @@ function showDailyLimitReached() {
 
 // Handle messages from background script
 function handleMessage(request, sender, sendResponse) {
+  console.log('📨 Content script received message:', request.action);
+  
   if (request.action === 'resetDailyUsage') {
+    console.log('🔄 Resetting daily usage...');
     dailyUsage = 0;
     startTime = Date.now();
     reminderShown = false;
@@ -198,6 +201,23 @@ function handleMessage(request, sender, sendResponse) {
     if (indicator) {
       indicator.style.background = 'rgba(0, 0, 0, 0.8)';
       updateUsageIndicator(0, 30);
+    }
+  }
+  
+  if (request.action === 'settingsUpdated') {
+    console.log('⚙️ Settings updated in content script:', request.settings);
+    // Update the daily limit and break reminder
+    const { dailyLimit, breakReminder, enabled } = request.settings;
+    console.log('📊 New settings - Daily limit:', dailyLimit, 'Break reminder:', breakReminder, 'Enabled:', enabled);
+    
+    // Update the usage indicator with new limit
+    const indicator = document.getElementById('doomscroll-indicator');
+    if (indicator) {
+      const limitElement = indicator.querySelector('.daily-limit');
+      if (limitElement) {
+        limitElement.textContent = `/${dailyLimit}m`;
+        console.log('✅ Updated usage indicator with new limit:', dailyLimit);
+      }
     }
   }
 }

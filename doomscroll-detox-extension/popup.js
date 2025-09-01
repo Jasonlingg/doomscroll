@@ -1,30 +1,46 @@
 // Popup script for Doomscroll Detox extension
 
+console.log('🚀 Popup script loaded!');
+alert('Popup script is working!'); // Temporary test
+
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 DOM Content Loaded - popup ready!');
+    console.log('🔍 Checking if elements exist...');
+    console.log('Save button exists:', !!document.getElementById('save-settings'));
+    console.log('Daily limit input exists:', !!document.getElementById('daily-limit-input'));
+    
     // Initialize popup
     loadSettings();
     loadStats();
     
     // Add event listeners
+    console.log('🔗 Adding event listeners...');
     document.getElementById('save-settings').addEventListener('click', saveSettings);
     document.getElementById('reset-today').addEventListener('click', resetToday);
     document.getElementById('enabled-toggle').addEventListener('change', handleToggleChange);
+    console.log('✅ Event listeners added successfully');
 });
 
 // Load current settings from storage
 function loadSettings() {
-    chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled'], (result) => {
-        const dailyLimit = result.dailyLimit || 30;
-        const breakReminder = result.breakReminder || 15;
-        const enabled = result.enabled !== false; // Default to true
-        
-        document.getElementById('daily-limit-input').value = dailyLimit;
-        document.getElementById('break-reminder-input').value = breakReminder;
-        document.getElementById('enabled-toggle').checked = enabled;
-        
-        // Update display
-        document.getElementById('daily-limit').textContent = dailyLimit + 'm';
-    });
+  console.log('📂 Loading settings from storage...');
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled'], (result) => {
+    console.log('📥 Retrieved settings from storage:', result);
+    
+    const dailyLimit = result.dailyLimit || 30;
+    const breakReminder = result.breakReminder || 15;
+    const enabled = result.enabled !== false; // Default to true
+    
+    console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled });
+    
+    document.getElementById('daily-limit-input').value = dailyLimit;
+    document.getElementById('break-reminder-input').value = breakReminder;
+    document.getElementById('enabled-toggle').checked = enabled;
+    
+    // Update display
+    document.getElementById('daily-limit').textContent = dailyLimit + 'm';
+    console.log('✅ Settings loaded and form updated');
+  });
 }
 
 // Load current stats
@@ -78,44 +94,57 @@ function updateUsageDisplay(usage) {
 
 // Save settings to storage
 function saveSettings() {
-    const dailyLimit = parseInt(document.getElementById('daily-limit-input').value);
-    const breakReminder = parseInt(document.getElementById('break-reminder-input').value);
-    const enabled = document.getElementById('enabled-toggle').checked;
+  console.log('💾 Save settings function called');
+  console.log('🎯 Button was clicked!');
+  
+  const dailyLimit = parseInt(document.getElementById('daily-limit-input').value);
+  const breakReminder = parseInt(document.getElementById('break-reminder-input').value);
+  const enabled = document.getElementById('enabled-toggle').checked;
+  
+  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled });
+  
+  // Validate inputs
+  if (dailyLimit < 5 || dailyLimit > 480) {
+    console.log('❌ Daily limit validation failed:', dailyLimit);
+    showMessage('Daily limit must be between 5 and 480 minutes', 'error');
+    return;
+  }
+  
+  if (breakReminder < 5 || breakReminder > 60) {
+    console.log('❌ Break reminder validation failed:', breakReminder);
+    showMessage('Break reminder must be between 5 and 60 minutes', 'error');
+    return;
+  }
+  
+  console.log('✅ Validation passed, saving to storage...');
+  
+  // Save to storage
+  chrome.storage.sync.set({
+    dailyLimit: dailyLimit,
+    breakReminder: breakReminder,
+    enabled: enabled
+  }, () => {
+    console.log('✅ Settings saved to storage successfully');
+    showMessage('Settings saved successfully!', 'success');
     
-    // Validate inputs
-    if (dailyLimit < 5 || dailyLimit > 480) {
-        showMessage('Daily limit must be between 5 and 480 minutes', 'error');
-        return;
-    }
+    // Update display
+    document.getElementById('daily-limit').textContent = dailyLimit + 'm';
+    console.log('📊 Updated display with new daily limit:', dailyLimit + 'm');
     
-    if (breakReminder < 5 || breakReminder > 60) {
-        showMessage('Break reminder must be between 5 and 60 minutes', 'error');
-        return;
-    }
-    
-    // Save to storage
-    chrome.storage.sync.set({
-        dailyLimit: dailyLimit,
-        breakReminder: breakReminder,
-        enabled: enabled
-    }, () => {
-        showMessage('Settings saved successfully!', 'success');
-        
-        // Update display
-        document.getElementById('daily-limit').textContent = dailyLimit + 'm';
-        
-        // Notify content scripts of settings change
-        chrome.tabs.query({}, (tabs) => {
-            tabs.forEach(tab => {
-                if (tab.url && isSocialMediaSite(tab.url)) {
-                    chrome.tabs.sendMessage(tab.id, {
-                        action: 'settingsUpdated',
-                        settings: { dailyLimit, breakReminder, enabled }
-                    });
-                }
-            });
-        });
+    // Notify content scripts of settings change
+    chrome.tabs.query({}, (tabs) => {
+      console.log('🔍 Found', tabs.length, 'tabs, notifying content scripts...');
+      tabs.forEach(tab => {
+        if (tab.url && isSocialMediaSite(tab.url)) {
+          console.log('📨 Sending settings update to:', tab.url);
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'settingsUpdated',
+            settings: { dailyLimit, breakReminder, enabled }
+          });
+        }
+      });
     });
+  });
 }
 
 // Reset today's usage
