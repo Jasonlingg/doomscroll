@@ -11,6 +11,8 @@
   "host_permissions": [
     "*://*.facebook.com/*",
     "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "*://*.youtube.com/*",
     "*://*.instagram.com/*",
     "*://*.tiktok.com/*",
     "*://*.reddit.com/*"
@@ -23,6 +25,8 @@
       "matches": [
         "*://*.facebook.com/*",
         "*://*.twitter.com/*",
+        "*://*.x.com/*",
+        "*://*.youtube.com/*",
         "*://*.instagram.com/*",
         "*://*.tiktok.com/*",
         "*://*.reddit.com/*"

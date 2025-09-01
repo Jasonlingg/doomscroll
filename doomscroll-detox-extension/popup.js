@@ -1,7 +1,8 @@
 // Popup script for Doomscroll Detox extension
 
 console.log('🚀 Popup script loaded!');
-alert('Popup script is working!'); // Temporary test
+console.log('📅 Current time:', new Date().toLocaleString());
+console.log('🔧 Testing basic functionality...');
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📱 DOM Content Loaded - popup ready!');
@@ -15,30 +16,77 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add event listeners
     console.log('🔗 Adding event listeners...');
-    document.getElementById('save-settings').addEventListener('click', saveSettings);
-    document.getElementById('reset-today').addEventListener('click', resetToday);
-    document.getElementById('enabled-toggle').addEventListener('change', handleToggleChange);
-    console.log('✅ Event listeners added successfully');
+    
+    const saveButton = document.getElementById('save-settings');
+    const resetButton = document.getElementById('reset-today');
+    const toggleCheckbox = document.getElementById('enabled-toggle');
+    
+    console.log('🔍 Button elements found:', {
+        saveButton: !!saveButton,
+        resetButton: !!resetButton,
+        toggleCheckbox: !!toggleCheckbox
+    });
+    
+    if (saveButton) {
+        saveButton.addEventListener('click', function() {
+            console.log('🎯 Save button clicked!');
+            saveSettings();
+        });
+        console.log('✅ Save button event listener added');
+    } else {
+        console.log('❌ Save button not found!');
+    }
+    
+    if (resetButton) {
+        resetButton.addEventListener('click', resetToday);
+        console.log('✅ Reset button event listener added');
+    }
+    
+    if (toggleCheckbox) {
+        toggleCheckbox.addEventListener('change', handleToggleChange);
+        console.log('✅ Toggle checkbox event listener added');
+    }
+    
+    const focusModeToggle = document.getElementById('focus-mode-toggle');
+    if (focusModeToggle) {
+        focusModeToggle.addEventListener('change', handleFocusModeToggle);
+        console.log('✅ Focus mode toggle event listener added');
+    }
+    
+    const addWebsiteBtn = document.getElementById('add-website-btn');
+    if (addWebsiteBtn) {
+        addWebsiteBtn.addEventListener('click', addNewWebsite);
+        console.log('✅ Add website button event listener added');
+    }
+    
+    console.log('✅ Event listeners setup complete');
 });
 
 // Load current settings from storage
 function loadSettings() {
   console.log('📂 Loading settings from storage...');
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled'], (result) => {
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled', 'focusMode', 'monitoredWebsites'], (result) => {
     console.log('📥 Retrieved settings from storage:', result);
     
     const dailyLimit = result.dailyLimit || 30;
     const breakReminder = result.breakReminder || 15;
     const enabled = result.enabled !== false; // Default to true
+    const focusMode = result.focusMode || false;
+    const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
     
-    console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled });
+    console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled, focusMode, monitoredWebsites });
     
     document.getElementById('daily-limit-input').value = dailyLimit;
     document.getElementById('break-reminder-input').value = breakReminder;
     document.getElementById('enabled-toggle').checked = enabled;
+    document.getElementById('focus-mode-toggle').checked = focusMode;
     
     // Update display
     document.getElementById('daily-limit').textContent = dailyLimit + 'm';
+    
+    // Load website list
+    loadWebsiteList(monitoredWebsites);
+    
     console.log('✅ Settings loaded and form updated');
   });
 }
@@ -100,8 +148,9 @@ function saveSettings() {
   const dailyLimit = parseInt(document.getElementById('daily-limit-input').value);
   const breakReminder = parseInt(document.getElementById('break-reminder-input').value);
   const enabled = document.getElementById('enabled-toggle').checked;
+  const focusMode = document.getElementById('focus-mode-toggle').checked;
   
-  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled });
+  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode });
   
   // Validate inputs
   if (dailyLimit < 5 || dailyLimit > 480) {
@@ -118,30 +167,37 @@ function saveSettings() {
   
   console.log('✅ Validation passed, saving to storage...');
   
-  // Save to storage
-  chrome.storage.sync.set({
-    dailyLimit: dailyLimit,
-    breakReminder: breakReminder,
-    enabled: enabled
-  }, () => {
-    console.log('✅ Settings saved to storage successfully');
-    showMessage('Settings saved successfully!', 'success');
+  // Get current monitored websites
+  chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+    const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
     
-    // Update display
-    document.getElementById('daily-limit').textContent = dailyLimit + 'm';
-    console.log('📊 Updated display with new daily limit:', dailyLimit + 'm');
-    
-    // Notify content scripts of settings change
-    chrome.tabs.query({}, (tabs) => {
-      console.log('🔍 Found', tabs.length, 'tabs, notifying content scripts...');
-      tabs.forEach(tab => {
-        if (tab.url && isSocialMediaSite(tab.url)) {
-          console.log('📨 Sending settings update to:', tab.url);
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'settingsUpdated',
-            settings: { dailyLimit, breakReminder, enabled }
-          });
-        }
+    // Save to storage
+    chrome.storage.sync.set({
+      dailyLimit: dailyLimit,
+      breakReminder: breakReminder,
+      enabled: enabled,
+      focusMode: focusMode,
+      monitoredWebsites: monitoredWebsites
+    }, () => {
+      console.log('✅ Settings saved to storage successfully');
+      showMessage('Settings saved successfully!', 'success');
+      
+      // Update display
+      document.getElementById('daily-limit').textContent = dailyLimit + 'm';
+      console.log('📊 Updated display with new daily limit:', dailyLimit + 'm');
+      
+      // Notify content scripts of settings change
+      chrome.tabs.query({}, (tabs) => {
+        console.log('🔍 Found', tabs.length, 'tabs, notifying content scripts...');
+        tabs.forEach(tab => {
+          if (tab.url && isMonitoredSite(tab.url, monitoredWebsites)) {
+            console.log('📨 Sending settings update to:', tab.url);
+            chrome.tabs.sendMessage(tab.id, {
+              action: 'settingsUpdated',
+              settings: { dailyLimit, breakReminder, enabled, focusMode }
+            });
+          }
+        });
       });
     });
   });
@@ -187,10 +243,195 @@ function handleToggleChange() {
     });
 }
 
-// Check if URL is a social media site
+// Handle focus mode toggle change
+function handleFocusModeToggle() {
+    const focusMode = document.getElementById('focus-mode-toggle').checked;
+    console.log('🎯 Focus mode toggled:', focusMode);
+    
+    // Save immediately
+    chrome.storage.sync.set({ focusMode: focusMode }, () => {
+        const message = focusMode ? 'Focus mode enabled' : 'Focus mode disabled';
+        showMessage(message, 'info');
+        
+        // Notify content scripts
+        chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+                if (tab.url && isSocialMediaSite(tab.url)) {
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: 'settingsUpdated',
+                        settings: { focusMode: focusMode }
+                    });
+                }
+            });
+        });
+    });
+}
+
+// Check if URL is a monitored site
 function isSocialMediaSite(url) {
-    const socialSites = ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'reddit.com'];
-    return socialSites.some(site => url.includes(site));
+    // Get the current monitored websites from storage
+    chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+        const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
+        const enabledSites = monitoredWebsites.filter(site => site.enabled).map(site => site.domain);
+        return enabledSites.some(site => url.includes(site));
+    });
+}
+
+// Get default websites
+function getDefaultWebsites() {
+    return [
+        { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
+        { domain: 'twitter.com', name: 'Twitter/X', enabled: true, isDefault: true },
+        { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+        { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+        { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+        { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+        { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+        { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
+        { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+    ];
+}
+
+// Load website list in the UI
+function loadWebsiteList(websites) {
+    const websiteList = document.getElementById('website-list');
+    if (!websiteList) return;
+    
+    websiteList.innerHTML = '';
+    
+    websites.forEach((website, index) => {
+        const websiteItem = document.createElement('div');
+        websiteItem.className = 'website-item';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'website-checkbox';
+        checkbox.checked = website.enabled;
+        checkbox.id = `website-${index}`;
+        
+        const label = document.createElement('label');
+        label.className = 'website-label';
+        label.htmlFor = `website-${index}`;
+        label.textContent = website.name;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-website';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove website';
+        
+        // Only show remove button for custom websites
+        if (!website.isDefault) {
+            removeBtn.style.display = 'inline-block';
+            removeBtn.addEventListener('click', () => removeWebsite(website.domain));
+        } else {
+            removeBtn.style.display = 'none';
+        }
+        
+        // Add event listener for checkbox changes
+        checkbox.addEventListener('change', () => {
+            console.log('🔄 Website checkbox changed:', website.name, 'enabled:', checkbox.checked);
+            website.enabled = checkbox.checked;
+            updateWebsiteSettings(websites);
+        });
+        
+        websiteItem.appendChild(checkbox);
+        websiteItem.appendChild(label);
+        websiteItem.appendChild(removeBtn);
+        websiteList.appendChild(websiteItem);
+    });
+}
+
+// Add new website
+function addNewWebsite() {
+    const input = document.getElementById('new-website-input');
+    const domain = input.value.trim().toLowerCase();
+    
+    if (!domain) {
+        showMessage('Please enter a website domain', 'error');
+        return;
+    }
+    
+    // Basic validation
+    if (!domain.includes('.') || domain.length < 3) {
+        showMessage('Please enter a valid website domain (e.g., youtube.com)', 'error');
+        return;
+    }
+    
+    // Check if website already exists
+    chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+        const websites = result.monitoredWebsites || getDefaultWebsites();
+        const exists = websites.some(site => site.domain === domain);
+        
+        if (exists) {
+            showMessage('This website is already in your list', 'error');
+            return;
+        }
+        
+        // Add new website
+        const newWebsite = {
+            domain: domain,
+            name: domain.replace('www.', ''),
+            enabled: true,
+            isDefault: false
+        };
+        
+        websites.push(newWebsite);
+        updateWebsiteSettings(websites);
+        
+        // Clear input
+        input.value = '';
+        showMessage('Website added successfully!', 'success');
+    });
+}
+
+// Remove website
+function removeWebsite(domain) {
+    chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+        const websites = result.monitoredWebsites || getDefaultWebsites();
+        const filteredWebsites = websites.filter(site => site.domain !== domain);
+        updateWebsiteSettings(filteredWebsites);
+        showMessage('Website removed successfully!', 'success');
+    });
+}
+
+// Update website settings in storage
+function updateWebsiteSettings(websites) {
+    console.log('💾 Saving website settings to storage:', websites);
+    
+    chrome.storage.sync.set({ monitoredWebsites: websites }, () => {
+        if (chrome.runtime.lastError) {
+            console.error('❌ Error saving website settings:', chrome.runtime.lastError);
+            showMessage('Failed to save website settings', 'error');
+            return;
+        }
+        
+        console.log('✅ Website settings saved to storage successfully');
+        
+        // Reload the website list
+        loadWebsiteList(websites);
+        
+        // Notify content scripts of the change
+        chrome.tabs.query({}, (tabs) => {
+            console.log('🔍 Notifying content scripts of website changes...');
+            tabs.forEach(tab => {
+                if (tab.url && isMonitoredSite(tab.url, websites)) {
+                    console.log('📨 Sending websitesUpdated to:', tab.url);
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: 'websitesUpdated',
+                        websites: websites
+                    });
+                }
+            });
+        });
+        
+        showMessage('Website settings updated!', 'success');
+    });
+}
+
+// Check if URL is monitored (helper function)
+function isMonitoredSite(url, websites) {
+    const enabledSites = websites.filter(site => site.enabled).map(site => site.domain);
+    return enabledSites.some(site => url.includes(site));
 }
 
 // Show message to user

@@ -46,6 +46,28 @@
                         Extension Enabled
                     </label>
                 </div>
+                
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="focus-mode-toggle">
+                        <span class="toggle-slider"></span>
+                        Focus Mode (30s alerts)
+                    </label>
+                </div>
+            </div>
+            
+            <div class="website-section">
+                <h3>Monitored Websites</h3>
+                <p class="section-description">Select which websites to monitor and add your own:</p>
+                
+                <div class="website-list" id="website-list">
+                    <!-- Websites will be populated by JavaScript -->
+                </div>
+                
+                <div class="add-website">
+                    <input type="text" id="new-website-input" placeholder="Enter website (e.g., youtube.com)" />
+                    <button id="add-website-btn" class="btn-secondary">Add Website</button>
+                </div>
             </div>
             
             <div class="actions-section">

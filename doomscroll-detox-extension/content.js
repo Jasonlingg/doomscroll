@@ -4,25 +4,80 @@ let startTime = Date.now();
 let isActive = true;
 let dailyUsage = 0;
 let reminderShown = false;
+let focusModeActive = false;
+let focusModeTimer = null;
+let focusModeAlertShown = false;
 
 // Initialize content script
 function init() {
+  console.log('🌐 Content script initializing on:', window.location.hostname);
+  
   // Get current daily usage from storage
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder'], (result) => {
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'monitoredWebsites'], (result) => {
     const dailyLimit = result.dailyLimit || 30;
     const breakReminder = result.breakReminder || 15;
+    const focusMode = result.focusMode || false;
+    const monitoredWebsites = result.monitoredWebsites || [];
     
-    // Start tracking time
-    startTimeTracking(dailyLimit, breakReminder);
+    console.log('🚀 Initializing content script with settings:', { dailyLimit, breakReminder, focusMode });
+    console.log('📋 Monitored websites:', monitoredWebsites);
     
-    // Add visual indicators
-    addUsageIndicator();
+    // Check if current site is monitored
+    const currentSite = window.location.hostname;
+    const currentUrl = window.location.href;
+    console.log('🔍 Checking site:', currentSite, 'URL:', currentUrl);
     
-    // Listen for page visibility changes
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // More robust matching - check both hostname and full URL
+    const isMonitored = monitoredWebsites.some(site => {
+      if (!site.enabled) return false;
+      
+      const domainMatch = currentSite.includes(site.domain) || currentUrl.includes(site.domain);
+      console.log(`  ${site.name} (${site.domain}): enabled=${site.enabled}, match=${domainMatch}`);
+      return domainMatch;
+    });
     
-    // Listen for messages from background script
-    chrome.runtime.onMessage.addListener(handleMessage);
+    console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
+    
+    if (isMonitored) {
+      console.log('✅ Site is monitored, starting tracking...');
+      
+      // Start tracking time
+      startTimeTracking(dailyLimit, breakReminder);
+      
+      // Add visual indicators
+      addUsageIndicator();
+      
+      // Start focus mode if enabled
+      if (focusMode) {
+        startFocusMode();
+      }
+      
+      // Listen for page visibility changes
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // Listen for messages from background script
+      chrome.runtime.onMessage.addListener(handleMessage);
+    } else {
+      console.log('❌ Site is not monitored, content script will not run');
+      
+      // Fallback: check if this is a known social media site even if settings aren't loaded
+      const fallbackSites = ['youtube.com', 'x.com', 'twitter.com', 'facebook.com', 'instagram.com', 'tiktok.com', 'reddit.com', 'linkedin.com'];
+      const isFallbackSite = fallbackSites.some(site => currentSite.includes(site));
+      
+      if (isFallbackSite) {
+        console.log('🔄 Fallback: Known site detected, starting with default settings...');
+        
+        // Start tracking with default settings
+        startTimeTracking(30, 15);
+        addUsageIndicator();
+        
+        // Listen for page visibility changes
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Listen for messages from background script
+        chrome.runtime.onMessage.addListener(handleMessage);
+      }
+    }
   });
 }
 
@@ -54,9 +109,20 @@ function startTimeTracking(dailyLimit, breakReminder) {
 function handleVisibilityChange() {
   if (document.hidden) {
     isActive = false;
+    // Pause focus mode timer
+    if (focusModeActive && focusModeTimer) {
+      clearTimeout(focusModeTimer);
+      console.log('⏸️ Focus mode timer paused - page hidden');
+    }
   } else {
     isActive = true;
     startTime = Date.now(); // Reset timer when page becomes visible
+    
+    // Resume focus mode timer if it was active
+    if (focusModeActive && !focusModeAlertShown) {
+      startFocusModeTimer();
+      console.log('▶️ Focus mode timer resumed - page visible');
+    }
   }
 }
 
@@ -207,8 +273,8 @@ function handleMessage(request, sender, sendResponse) {
   if (request.action === 'settingsUpdated') {
     console.log('⚙️ Settings updated in content script:', request.settings);
     // Update the daily limit and break reminder
-    const { dailyLimit, breakReminder, enabled } = request.settings;
-    console.log('📊 New settings - Daily limit:', dailyLimit, 'Break reminder:', breakReminder, 'Enabled:', enabled);
+    const { dailyLimit, breakReminder, enabled, focusMode } = request.settings;
+    console.log('📊 New settings - Daily limit:', dailyLimit, 'Break reminder:', breakReminder, 'Enabled:', enabled, 'Focus mode:', focusMode);
     
     // Update the usage indicator with new limit
     const indicator = document.getElementById('doomscroll-indicator');
@@ -219,7 +285,180 @@ function handleMessage(request, sender, sendResponse) {
         console.log('✅ Updated usage indicator with new limit:', dailyLimit);
       }
     }
+    
+    // Handle focus mode changes
+    if (focusMode && !focusModeActive) {
+      console.log('🎯 Focus mode enabled - starting focus mode');
+      startFocusMode();
+    } else if (!focusMode && focusModeActive) {
+      console.log('⏹️ Focus mode disabled - stopping focus mode');
+      stopFocusMode();
+    }
   }
+  
+  if (request.action === 'websitesUpdated') {
+    console.log('🌐 Websites updated in content script:', request.websites);
+    
+    // Check if current site is still monitored
+    const currentSite = window.location.hostname;
+    const isStillMonitored = request.websites.some(site => 
+      site.enabled && (currentSite.includes(site.domain) || window.location.href.includes(site.domain))
+    );
+    
+    console.log('🎯 Current site still monitored after update?', isStillMonitored);
+    
+    if (!isStillMonitored) {
+      console.log('🛑 Site no longer monitored, stopping tracking...');
+      
+      // Remove usage indicator
+      const indicator = document.getElementById('doomscroll-indicator');
+      if (indicator) {
+        indicator.remove();
+        console.log('✅ Usage indicator removed');
+      }
+      
+      // Stop focus mode if active
+      if (focusModeActive) {
+        stopFocusMode();
+        console.log('✅ Focus mode stopped');
+      }
+      
+      // Remove event listeners
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      console.log('✅ Event listeners removed');
+    }
+  }
+}
+
+// Focus mode functions
+function startFocusMode() {
+  console.log('🎯 Starting focus mode...');
+  focusModeActive = true;
+  focusModeAlertShown = false;
+  startFocusModeTimer();
+}
+
+function stopFocusMode() {
+  console.log('⏹️ Stopping focus mode...');
+  focusModeActive = false;
+  if (focusModeTimer) {
+    clearTimeout(focusModeTimer);
+    focusModeTimer = null;
+  }
+  focusModeAlertShown = false;
+}
+
+function startFocusModeTimer() {
+  if (focusModeTimer) {
+    clearTimeout(focusModeTimer);
+  }
+  
+  console.log('⏰ Starting 30-second focus mode timer...');
+  focusModeTimer = setTimeout(() => {
+    if (focusModeActive && !focusModeAlertShown) {
+      showFocusModeAlert();
+    }
+  }, 30000); // 30 seconds
+}
+
+function showFocusModeAlert() {
+  console.log('🚨 Showing focus mode alert!');
+  focusModeAlertShown = true;
+  
+  const alert = document.createElement('div');
+  alert.id = 'focus-mode-alert';
+  alert.innerHTML = `
+    <div class="focus-alert-content">
+      <h3>🚨 Focus Mode Alert!</h3>
+      <p>You've been on this social media site for 30 seconds.</p>
+      <p><strong>Are you being productive?</strong></p>
+      <div class="focus-alert-buttons">
+        <button id="yes-productive" class="btn-focus-yes">Yes, I'm being productive</button>
+        <button id="no-productive" class="btn-focus-no">No, I'm being unproductive</button>
+      </div>
+    </div>
+  `;
+  
+  // Style the alert
+  alert.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10003;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+    color: white;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    max-width: 400px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+  
+  document.body.appendChild(alert);
+  
+  // Add button functionality
+  document.getElementById('yes-productive').addEventListener('click', () => {
+    console.log('✅ User confirmed they are being productive');
+    alert.remove();
+    // Reset timer for another 30 seconds
+    focusModeAlertShown = false;
+    startFocusModeTimer();
+  });
+  
+  document.getElementById('no-productive').addEventListener('click', () => {
+    console.log('❌ User admitted they are being unproductive');
+    alert.remove();
+    // Show motivational message and suggest alternatives
+    showProductivitySuggestion();
+  });
+}
+
+function showProductivitySuggestion() {
+  const suggestion = document.createElement('div');
+  suggestion.id = 'productivity-suggestion';
+  suggestion.innerHTML = `
+    <div class="suggestion-content">
+      <h3>💪 Great Self-Awareness!</h3>
+      <p>Recognizing unproductive behavior is the first step to change.</p>
+      <div class="suggestion-ideas">
+        <h4>Try these instead:</h4>
+        <ul>
+          <li>📚 Read a book or article</li>
+          <li>🎯 Work on a personal project</li>
+          <li>🏃‍♂️ Take a short walk</li>
+          <li>🧘‍♀️ Practice mindfulness</li>
+          <li>📝 Journal your thoughts</li>
+        </ul>
+      </div>
+      <button id="close-suggestion" class="btn-close">Got it!</button>
+    </div>
+  `;
+  
+  // Style the suggestion
+  suggestion.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10004;
+    background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+    color: white;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    max-width: 450px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+  
+  document.body.appendChild(suggestion);
+  
+  // Add close functionality
+  document.getElementById('close-suggestion').addEventListener('click', () => {
+    suggestion.remove();
+  });
 }
 
 // Initialize when DOM is ready

@@ -6,16 +6,32 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('📅 Initializing default settings...');
   
   // Initialize default settings
+  const defaultWebsites = [
+    { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
+    { domain: 'twitter.com', name: 'Twitter/X', enabled: true, isDefault: true },
+    { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+    { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+    { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+    { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+    { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+    { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
+    { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+  ];
+  
   chrome.storage.sync.set({
     enabled: true,
     dailyLimit: 30, // minutes
     breakReminder: 15, // minutes
+    focusMode: false, // focus mode disabled by default
+    monitoredWebsites: defaultWebsites,
     lastReset: Date.now()
   }, () => {
     console.log('✅ Default settings initialized:', {
       enabled: true,
       dailyLimit: 30,
-      breakReminder: 15
+      breakReminder: 15,
+      focusMode: false,
+      monitoredWebsites: defaultWebsites
     });
   });
 });
@@ -74,10 +90,12 @@ function checkDailyReset() {
   });
 }
 
-// Check if URL is a social media site
+// Check if URL is a monitored site
 function isSocialMediaSite(url) {
-  const socialSites = ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'reddit.com'];
-  return socialSites.some(site => url.includes(site));
+  // This will be updated dynamically based on user settings
+  // For now, check against common social media sites
+  const commonSites = ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'reddit.com'];
+  return commonSites.some(site => url.includes(site));
 }
 
 // Run daily reset check every hour
