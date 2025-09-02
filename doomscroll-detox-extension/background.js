@@ -1,9 +1,29 @@
 // Background service worker for Doomscroll Detox extension
 
+// Helper function to show visual logs
+function showBackgroundLog(message, type = 'info') {
+  console.log(`[Background] ${message}`);
+  
+  // Also send to any open popup or content scripts
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && isSocialMediaSite(tab.url)) {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'backgroundLog',
+          message: message,
+          type: type
+        }).catch(() => {
+          // Ignore errors if content script not ready
+        });
+      }
+    });
+  });
+}
+
 // Listen for extension installation
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('🚀 Doomscroll Detox extension installed successfully!');
-  console.log('📅 Initializing default settings...');
+  showBackgroundLog('🚀 Doomscroll Detox extension installed successfully!');
+  showBackgroundLog('📅 Initializing default settings...');
   
   // Initialize default settings
   const defaultWebsites = [
@@ -36,27 +56,27 @@ chrome.runtime.onInstalled.addListener(() => {
       analytics: false // No analytics
     }
   }, () => {
-    console.log('✅ Default settings initialized with privacy defaults');
+    showBackgroundLog('✅ Default settings initialized with privacy defaults');
   });
 });
 
 // Listen for messages from content script or popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('📨 Message received:', request.action, 'from:', sender.tab?.url || 'popup');
+  showBackgroundLog(`📨 Message received: ${request.action} from: ${sender.tab?.url || 'popup'}`);
   
   if (request.action === 'getStats') {
-    console.log('📊 Getting stats...');
+    showBackgroundLog('📊 Getting stats...');
     chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'lastReset'], (result) => {
-      console.log('📈 Stats retrieved:', result);
+      showBackgroundLog(`📈 Stats retrieved: ${JSON.stringify(result)}`);
       sendResponse(result);
     });
     return true; // Keep message channel open for async response
   }
   
   if (request.action === 'updateSettings') {
-    console.log('⚙️ Updating settings:', request.settings);
+    showBackgroundLog(`⚙️ Updating settings: ${JSON.stringify(request.settings)}`);
     chrome.storage.sync.set(request.settings, () => {
-      console.log('✅ Settings updated successfully');
+      showBackgroundLog('✅ Settings updated successfully');
       sendResponse({ success: true });
     });
     return true;
@@ -65,31 +85,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Check if daily limit should be reset (new day)
 function checkDailyReset() {
-  console.log('🔄 Checking for daily reset...');
-  chrome.storage.sync.get(['lastReset'], (result) => {
+  showBackgroundLog('🔄 Checking for daily reset...');
+  chrome.storage.sync.get(['lastReset', 'dailyUsage'], (result) => {
     const now = Date.now();
     const lastReset = result.lastReset || 0;
+    const dailyUsage = result.dailyUsage || 0;
     const oneDay = 24 * 60 * 60 * 1000;
     
-    console.log('📅 Last reset:', new Date(lastReset).toLocaleString());
-    console.log('⏰ Current time:', new Date(now).toLocaleString());
-    console.log('⏱️ Time since last reset:', Math.floor((now - lastReset) / (1000 * 60 * 60)), 'hours');
+    showBackgroundLog(`📅 Last reset: ${new Date(lastReset).toLocaleString()}`);
+    showBackgroundLog(`⏰ Current time: ${new Date(now).toLocaleString()}`);
+    showBackgroundLog(`⏱️ Time since last reset: ${Math.floor((now - lastReset) / (1000 * 60 * 60))} hours`);
+    showBackgroundLog(`📊 Current daily usage: ${dailyUsage} minutes`);
     
     if (now - lastReset >= oneDay) {
-      console.log('🆕 New day detected! Resetting daily usage...');
-      chrome.storage.sync.set({ lastReset: now });
+      showBackgroundLog('🆕 New day detected! Resetting daily usage...');
+      chrome.storage.sync.set({ lastReset: now, dailyUsage: 0 });
       // Reset daily usage tracking
       chrome.tabs.query({}, (tabs) => {
-        console.log('🔍 Found', tabs.length, 'tabs, checking for social media sites...');
+        showBackgroundLog(`🔍 Found ${tabs.length} tabs, checking for social media sites...`);
         tabs.forEach(tab => {
           if (tab.url && isSocialMediaSite(tab.url)) {
-            console.log('🔄 Resetting usage for:', tab.url);
+            showBackgroundLog(`🔄 Resetting usage for: ${tab.url}`);
             chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' });
           }
         });
       });
     } else {
-      console.log('✅ No reset needed, same day');
+      showBackgroundLog('✅ No reset needed, same day');
     }
   });
 }
@@ -102,6 +124,10 @@ function isSocialMediaSite(url) {
   return commonSites.some(site => url.includes(site));
 }
 
-// Run daily reset check every hour
+// Set up periodic daily reset check (every hour)
+setInterval(checkDailyReset, 60 * 60 * 1000); // Check every hour
+
+// Also check when extension starts
+checkDailyReset();
 setInterval(checkDailyReset, 60 * 60 * 1000);
 checkDailyReset(); // Initial check

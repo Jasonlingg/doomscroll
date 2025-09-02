@@ -109,28 +109,33 @@ function loadSettings() {
 
 // Load current stats
 function loadStats() {
-    chrome.storage.sync.get(['lastReset'], (result) => {
+    chrome.storage.sync.get(['lastReset', 'dailyUsage'], (result) => {
         const lastReset = result.lastReset || Date.now();
+        const dailyUsage = result.dailyUsage || 0;
         const now = Date.now();
         const oneDay = 24 * 60 * 60 * 1000;
         
         // Check if it's a new day
         if (now - lastReset >= oneDay) {
+            console.log('🆕 New day detected, resetting usage display');
             updateUsageDisplay(0);
         } else {
-            // Get current tab to check usage
+            console.log('📅 Same day, loading stored usage:', dailyUsage);
+            // Use stored usage first, then try to get from content script
+            updateUsageDisplay(dailyUsage);
+            
+            // Also try to get from content script if available
             chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
                 if (tabs[0] && isSocialMediaSite(tabs[0].url)) {
                     // Request usage from content script
                     chrome.tabs.sendMessage(tabs[0].id, {action: 'getUsage'}, (response) => {
                         if (response && response.usage !== undefined) {
+                            console.log('📊 Got usage from content script:', response.usage);
                             updateUsageDisplay(response.usage);
                         } else {
-                            updateUsageDisplay(0);
+                            console.log('📊 No response from content script, using stored:', dailyUsage);
                         }
                     });
-                } else {
-                    updateUsageDisplay(0);
                 }
             });
         }
@@ -140,9 +145,11 @@ function loadStats() {
 // Update usage display
 function updateUsageDisplay(usage) {
     const dailyLimit = parseInt(document.getElementById('daily-limit-input').value) || 30;
-    const percentage = Math.min((usage / dailyLimit) * 100, 100);
+    // Ensure usage is a whole number
+    const wholeUsage = Math.floor(usage);
+    const percentage = Math.min((wholeUsage / dailyLimit) * 100, 100);
     
-    document.getElementById('today-usage').textContent = usage + 'm';
+    document.getElementById('today-usage').textContent = wholeUsage + 'm';
     document.getElementById('progress-fill').style.width = percentage + '%';
     
     // Update progress bar color
@@ -225,7 +232,7 @@ function saveSettings() {
 
 // Reset today's usage
 function resetToday() {
-    chrome.storage.sync.set({ lastReset: Date.now() }, () => {
+    chrome.storage.sync.set({ lastReset: Date.now(), dailyUsage: 0 }, () => {
         showMessage('Today\'s usage has been reset!', 'success');
         updateUsageDisplay(0);
         

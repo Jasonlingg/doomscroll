@@ -26,6 +26,10 @@ let currentSettings = {
   showOverlays: true
 };
 
+// Session tracking state
+let sessionStartTime = Date.now();
+let lastMinuteCompleted = 0;
+
 // Initialize content script
 function init() {
   console.log('🌐 Content script initializing on:', window.location.hostname);
@@ -113,28 +117,84 @@ function init() {
   });
 }
 
-// Track time spent on page
+// Track time spent on page with proper persistence
 function startTimeTracking(dailyLimit, breakReminder) {
+  console.log('⏱️ Starting time tracking...');
+  
+  // Load existing daily usage from storage
+  loadDailyUsage();
+  
+  // Reset session timer for new tracking session
+  sessionStartTime = Date.now();
+  lastMinuteCompleted = 0;
+  
+  // Update every second
   setInterval(() => {
     if (isActive) {
-      const timeSpent = Math.floor((Date.now() - startTime) / 1000 / 60); // minutes
-      dailyUsage = timeSpent;
+      // Calculate time spent on this session only
+      const sessionTime = Math.floor((Date.now() - sessionStartTime) / 1000 / 60); // minutes
       
-      // Update usage indicator
-      updateUsageIndicator(timeSpent, dailyLimit);
+      // Only increment usage every full minute, and only if we haven't counted this minute yet
+      if (sessionTime > lastMinuteCompleted) {
+        dailyUsage += 1; // Add 1 full minute
+        lastMinuteCompleted = sessionTime;
+        console.log('⏱️ Minute completed! Daily usage:', dailyUsage, 'minutes');
+        
+        // Save to storage when we increment
+        saveDailyUsage();
+      }
+      
+      // Update usage indicator with total daily usage
+      updateUsageIndicator(dailyUsage, dailyLimit);
       
       // Show break reminder
-      if (timeSpent >= breakReminder && !reminderShown) {
+      if (dailyUsage >= breakReminder && !reminderShown) {
         showBreakReminder();
         reminderShown = true;
       }
       
       // Check daily limit
-      if (timeSpent >= dailyLimit) {
+      if (dailyUsage >= dailyLimit) {
         showDailyLimitReached();
       }
     }
   }, 1000); // Check every second
+}
+
+// Load daily usage from storage
+function loadDailyUsage() {
+  chrome.storage.sync.get(['dailyUsage', 'lastReset'], (result) => {
+    const lastReset = result.lastReset || Date.now();
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    
+    // Check if it's a new day
+    if (now - lastReset >= oneDay) {
+      console.log('🆕 New day detected, resetting usage');
+      dailyUsage = 0;
+      // Reset the last reset time
+      chrome.storage.sync.set({ lastReset: now, dailyUsage: 0 });
+    } else {
+      console.log('📅 Same day, loading existing usage');
+      dailyUsage = Math.floor(result.dailyUsage || 0); // Ensure whole number
+      // Don't adjust startTime - we'll track session time separately
+    }
+    
+    console.log('📊 Loaded daily usage:', dailyUsage, 'minutes');
+  });
+}
+
+// Save daily usage to storage
+function saveDailyUsage() {
+  // Ensure we save whole numbers
+  const wholeMinutes = Math.floor(dailyUsage);
+  chrome.storage.sync.set({ dailyUsage: wholeMinutes }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('❌ Failed to save daily usage:', chrome.runtime.lastError);
+    } else {
+      console.log('💾 Saved daily usage:', wholeMinutes, 'minutes');
+    }
+  });
 }
 
 // Handle page visibility changes
@@ -148,7 +208,13 @@ function handleVisibilityChange() {
     }
   } else {
     isActive = true;
-    startTime = Date.now(); // Reset timer when page becomes visible
+    
+    // Reset session timer when coming back to tab (but don't affect daily usage)
+    if (typeof sessionStartTime !== 'undefined') {
+      sessionStartTime = Date.now();
+      lastMinuteCompleted = 0;
+      console.log('🔄 Reset session timer for new tab session');
+    }
     
     // Resume focus mode timer if it was active
     if (focusModeActive && !focusModeAlertShown) {
@@ -175,20 +241,45 @@ function addUsageIndicator() {
     top: 20px;
     right: 20px;
     z-index: 10000;
-    background: rgba(0, 0, 0, 0.8);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%);
     color: white;
-    padding: 8px 12px;
-    border-radius: 20px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    font-weight: bold;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    padding: 12px 16px;
+    border-radius: 25px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
     cursor: move;
     user-select: none;
+    min-width: 100px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
   `;
   
   // Make it draggable
   makeDraggable(indicator);
+  
+  // Add hover effect
+  indicator.addEventListener('mouseenter', () => {
+    if (!indicator.classList.contains('dragging')) {
+      const currentTransform = indicator.style.transform || 'translate3d(0px, 0px, 0px)';
+      indicator.style.transform = currentTransform + ' scale(1.05)';
+      indicator.style.boxShadow = '0 6px 25px rgba(0, 0, 0, 0.5), 0 3px 12px rgba(0, 0, 0, 0.3)';
+    }
+  });
+  
+  indicator.addEventListener('mouseleave', () => {
+    if (!indicator.classList.contains('dragging')) {
+      const currentTransform = indicator.style.transform || 'translate3d(0px, 0px, 0px)';
+      // Remove scale but keep the translate part
+      const translateMatch = currentTransform.match(/translate3d\([^)]+\)/);
+      const translatePart = translateMatch ? translateMatch[0] : 'translate3d(0px, 0px, 0px)';
+      indicator.style.transform = translatePart;
+      indicator.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2)';
+    }
+  });
   
   document.body.appendChild(indicator);
 }
@@ -198,14 +289,17 @@ function updateUsageIndicator(timeSpent, dailyLimit) {
   const indicator = document.getElementById('doomscroll-indicator');
   if (!indicator) return;
   
+  // Ensure timeSpent is a whole number
+  const wholeMinutes = Math.floor(timeSpent);
+  
   // Batch DOM updates to avoid excessive reflows
   const updates = [];
   
   const timeElement = indicator.querySelector('.time-spent');
   const limitElement = indicator.querySelector('.daily-limit');
   
-  if (timeElement && timeElement.textContent !== `${timeSpent}m`) {
-    updates.push(() => timeElement.textContent = `${timeSpent}m`);
+  if (timeElement && timeElement.textContent !== `${wholeMinutes}m`) {
+    updates.push(() => timeElement.textContent = `${wholeMinutes}m`);
   }
   
   if (limitElement && limitElement.textContent !== `/${dailyLimit}m`) {
@@ -213,11 +307,13 @@ function updateUsageIndicator(timeSpent, dailyLimit) {
   }
   
   // Determine new background color
-  let newBackground = 'rgba(0, 0, 0, 0.8)'; // Default
-  if (timeSpent >= dailyLimit) {
-    newBackground = 'rgba(255, 0, 0, 0.9)'; // Red
-  } else if (timeSpent >= dailyLimit * 0.8) {
-    newBackground = 'rgba(255, 165, 0, 0.9)'; // Orange
+  let newBackground = 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%)'; // Default
+  if (wholeMinutes >= dailyLimit) {
+    newBackground = 'linear-gradient(135deg, rgba(255, 107, 107, 0.95) 0%, rgba(255, 0, 0, 0.85) 100%)'; // Red gradient
+  } else if (wholeMinutes >= dailyLimit * 0.8) {
+    newBackground = 'linear-gradient(135deg, rgba(255, 165, 0, 0.95) 0%, rgba(255, 140, 0, 0.85) 100%)'; // Orange gradient
+  } else if (wholeMinutes > 0) {
+    newBackground = 'linear-gradient(135deg, rgba(76, 205, 196, 0.95) 0%, rgba(78, 205, 196, 0.85) 100%)'; // Teal gradient when active
   }
   
   // Only update background if it changed
@@ -253,6 +349,8 @@ function makeDraggable(element) {
     
     if (e.target === element || element.contains(e.target)) {
       isDragging = true;
+      // Remove hover effect while dragging
+      element.classList.add('dragging');
     }
   }
 
@@ -266,7 +364,8 @@ function makeDraggable(element) {
       xOffset = currentX;
       yOffset = currentY;
       
-      element.style.transform = `translate(${currentX}px, ${currentY}px)`;
+      // Use translate3d for better performance and to avoid conflicts with scale
+      element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
     }
   }
 
@@ -274,6 +373,9 @@ function makeDraggable(element) {
     initialX = currentX;
     initialY = currentY;
     isDragging = false;
+    
+    // Remove dragging class to restore hover effects
+    element.classList.remove('dragging');
   }
 }
 
@@ -357,6 +459,20 @@ function showDailyLimitReached() {
 function handleMessage(request, sender, sendResponse) {
   console.log('📨 Content script received message:', request.action);
   
+  if (request.action === 'getUsage') {
+    console.log('📊 Usage requested, current usage:', dailyUsage);
+    // Ensure we have the latest usage from storage
+    chrome.storage.sync.get(['dailyUsage'], (result) => {
+      const storedUsage = result.dailyUsage || 0;
+      if (Math.abs(storedUsage - dailyUsage) > 0.1) { // If difference is more than 6 seconds
+        console.log('🔄 Syncing usage with storage:', storedUsage, 'vs', dailyUsage);
+        dailyUsage = storedUsage;
+      }
+      sendResponse({ usage: Math.floor(dailyUsage) });
+    });
+    return true; // Keep message channel open for async response
+  }
+  
   if (request.action === 'resetDailyUsage') {
     console.log('🔄 Resetting daily usage...');
     dailyUsage = 0;
@@ -369,6 +485,9 @@ function handleMessage(request, sender, sendResponse) {
       indicator.style.background = 'rgba(0, 0, 0, 0.8)';
       updateUsageIndicator(0, 30);
     }
+    
+    // Save reset usage to storage
+    saveDailyUsage();
   }
   
   if (request.action === 'settingsUpdated') {
@@ -453,6 +572,14 @@ function handleMessage(request, sender, sendResponse) {
     }
     
     console.log('✅ Settings updated successfully');
+  }
+  
+  if (request.action === 'backgroundLog') {
+    console.log(`[Background] ${request.message}`);
+    // Optionally show as toast notification
+    if (request.type === 'error' || request.type === 'warning') {
+      showToastMessage(request.message, request.type);
+    }
   }
 }
 
