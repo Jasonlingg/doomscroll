@@ -1,0 +1,164 @@
+/* Content Script Styles - Only for floating elements and overlays */
+
+/* Floating Usage Indicator */
+#doomscroll-indicator {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  z-index: 10000 !important;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%) !important;
+  color: white !important;
+  padding: 12px 16px !important;
+  border-radius: 25px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+  cursor: move !important;
+  user-select: none !important;
+  min-width: 100px !important;
+  text-align: center !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  transition: all 0.3s ease !important;
+}
+
+#doomscroll-indicator:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5), 0 3px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Break Reminder Overlay */
+#doomscroll-reminder {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 10001 !important;
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%) !important;
+  color: white !important;
+  padding: 24px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  text-align: center !important;
+  max-width: 400px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Daily Limit Overlay */
+#doomscroll-limit {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 10002 !important;
+  background: #ff6b6b !important;
+  color: white !important;
+  padding: 20px !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  text-align: center !important;
+  max-width: 300px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Focus Mode Alert */
+#focus-mode-alert {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 10003 !important;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%) !important;
+  color: white !important;
+  padding: 24px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  text-align: center !important;
+  max-width: 400px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Toast Messages */
+#doomscroll-toast {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  z-index: 10004 !important;
+  padding: 12px 16px !important;
+  border-radius: 8px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  max-width: 300px !important;
+  word-wrap: break-word !important;
+  animation: slideInRight 0.3s ease-out !important;
+}
+
+/* Privacy Notice */
+#privacy-notice {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 20px !important;
+  z-index: 10005 !important;
+  background: rgba(0, 0, 0, 0.95) !important;
+  color: white !important;
+  padding: 20px !important;
+  border-radius: 12px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  max-width: 300px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Button Styles for Overlays */
+#doomscroll-reminder button,
+#doomscroll-limit button,
+#focus-mode-alert button,
+#privacy-notice button {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background 0.3s ease !important;
+  margin: 4px !important;
+}
+
+#doomscroll-reminder button:hover,
+#doomscroll-limit button:hover,
+#focus-mode-alert button:hover,
+#privacy-notice button:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Toast Animations */
+#toast-animations {
+  display: none !important;
+}

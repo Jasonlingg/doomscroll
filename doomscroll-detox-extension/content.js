@@ -37,11 +37,23 @@ function init() {
   // Add error handling for chrome.storage
   if (!chrome.storage) {
     console.error('❌ Chrome storage API not available');
+    // Continue with localStorage fallback
+    startTimeTracking(30, 15); // Use default values
+    addUsageIndicator();
     return;
   }
   
   // Get current daily usage from storage
   chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
+    if (chrome.runtime.lastError) {
+      console.error('❌ Storage access error during init:', chrome.runtime.lastError);
+      // Use default settings and localStorage fallback
+      currentSettings = { dailyLimit: 30, breakReminder: 15, enabled: true, focusMode: false, focusSensitivity: 'medium', showOverlays: true };
+      startTimeTracking(30, 15);
+      addUsageIndicator();
+      return;
+    }
+    
     const dailyLimit = result.dailyLimit || 30;
     const breakReminder = result.breakReminder || 15;
     const focusMode = result.focusMode || false;
@@ -161,9 +173,37 @@ function startTimeTracking(dailyLimit, breakReminder) {
   }, 1000); // Check every second
 }
 
-// Load daily usage from storage
+// Load daily usage from storage with error handling
 function loadDailyUsage() {
+  // Check if chrome.storage is available
+  if (!chrome.storage || !chrome.storage.sync) {
+    console.error('❌ Chrome storage API not available');
+    dailyUsage = 0;
+    return;
+  }
+  
   chrome.storage.sync.get(['dailyUsage', 'lastReset'], (result) => {
+    if (chrome.runtime.lastError) {
+      console.error('❌ Storage access error:', chrome.runtime.lastError);
+      // Fallback to local storage
+      try {
+        const localUsage = localStorage.getItem('doomscroll_daily_usage');
+        const localReset = localStorage.getItem('doomscroll_last_reset');
+        
+        if (localUsage && localReset) {
+          dailyUsage = Math.floor(parseInt(localUsage) || 0);
+          console.log('📊 Loaded daily usage from localStorage:', dailyUsage, 'minutes');
+        } else {
+          dailyUsage = 0;
+          console.log('📊 No local storage found, starting fresh');
+        }
+      } catch (e) {
+        console.error('❌ Local storage also failed:', e);
+        dailyUsage = 0;
+      }
+      return;
+    }
+    
     const lastReset = result.lastReset || Date.now();
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
@@ -173,7 +213,7 @@ function loadDailyUsage() {
       console.log('🆕 New day detected, resetting usage');
       dailyUsage = 0;
       // Reset the last reset time
-      chrome.storage.sync.set({ lastReset: now, dailyUsage: 0 });
+      saveDailyUsage();
     } else {
       console.log('📅 Same day, loading existing usage');
       dailyUsage = Math.floor(result.dailyUsage || 0); // Ensure whole number
@@ -184,17 +224,39 @@ function loadDailyUsage() {
   });
 }
 
-// Save daily usage to storage
+// Save daily usage to storage with error handling
 function saveDailyUsage() {
   // Ensure we save whole numbers
   const wholeMinutes = Math.floor(dailyUsage);
-  chrome.storage.sync.set({ dailyUsage: wholeMinutes }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('❌ Failed to save daily usage:', chrome.runtime.lastError);
-    } else {
-      console.log('💾 Saved daily usage:', wholeMinutes, 'minutes');
-    }
-  });
+  
+  // Try chrome.storage first
+  if (chrome.storage && chrome.storage.sync) {
+    chrome.storage.sync.set({ dailyUsage: wholeMinutes }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('❌ Failed to save to chrome.storage:', chrome.runtime.lastError);
+        // Fallback to localStorage
+        saveToLocalStorage(wholeMinutes);
+      } else {
+        console.log('💾 Saved daily usage to chrome.storage:', wholeMinutes, 'minutes');
+      }
+    });
+  } else {
+    // Fallback to localStorage
+    saveToLocalStorage(wholeMinutes);
+  }
+}
+
+// Fallback storage function
+function saveToLocalStorage(wholeMinutes) {
+  try {
+    localStorage.setItem('doomscroll_daily_usage', wholeMinutes.toString());
+    localStorage.setItem('doomscroll_last_reset', Date.now().toString());
+    console.log('💾 Saved daily usage to localStorage:', wholeMinutes, 'minutes');
+  } catch (e) {
+    console.error('❌ Failed to save to localStorage:', e);
+    // Last resort - just keep in memory
+    console.log('⚠️ Keeping usage in memory only:', wholeMinutes, 'minutes');
+  }
 }
 
 // Handle page visibility changes

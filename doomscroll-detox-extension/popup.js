@@ -71,6 +71,25 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Block current site button event listener added');
     }
     
+    // Add collapsible section functionality
+    const settingsToggle = document.getElementById('settings-toggle');
+    const settingsContent = document.getElementById('settings-content');
+    if (settingsToggle && settingsContent) {
+        settingsToggle.addEventListener('click', () => {
+            settingsContent.classList.toggle('collapsed');
+            settingsToggle.classList.toggle('collapsed');
+        });
+    }
+    
+    const websitesToggle = document.getElementById('websites-toggle');
+    const websitesContent = document.getElementById('websites-content');
+    if (websitesToggle && websitesContent) {
+        websitesToggle.addEventListener('click', () => {
+            websitesContent.classList.toggle('collapsed');
+            websitesToggle.classList.toggle('collapsed');
+        });
+    }
+    
     console.log('✅ Event listeners setup complete');
 });
 
@@ -151,15 +170,16 @@ function updateUsageDisplay(usage) {
     
     document.getElementById('today-usage').textContent = wholeUsage + 'm';
     document.getElementById('progress-fill').style.width = percentage + '%';
+    document.getElementById('progress-percentage').textContent = Math.round(percentage) + '%';
     
     // Update progress bar color
     const progressFill = document.getElementById('progress-fill');
     if (percentage >= 100) {
-        progressFill.style.backgroundColor = '#ff6b6b'; // Red
+        progressFill.style.background = 'linear-gradient(90deg, #ff6b6b 0%, #ff5252 100%)'; // Red
     } else if (percentage >= 80) {
-        progressFill.style.backgroundColor = '#ffa500'; // Orange
+        progressFill.style.background = 'linear-gradient(90deg, #ffa500 0%, #ff8c00 100%)'; // Orange
     } else {
-        progressFill.style.backgroundColor = '#4ecdc4'; // Teal
+        progressFill.style.background = 'linear-gradient(90deg, #4caf50 0%, #45a049 100%)'; // Green
     }
 }
 
