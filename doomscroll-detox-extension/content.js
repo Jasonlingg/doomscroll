@@ -29,6 +29,71 @@ let currentSettings = {
 // Session tracking state
 let sessionStartTime = Date.now();
 let lastMinuteCompleted = 0;
+let settingsJustUpdated = false; // Flag to prevent override during settings update
+
+// Function to refresh settings from storage
+function refreshSettings() {
+  console.log('🔄 Refreshing settings from storage...');
+  
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled'], (result) => {
+    if (chrome.runtime.lastError) {
+      console.error('❌ Storage access error during refresh:', chrome.runtime.lastError);
+      return;
+    }
+    
+    // Update current settings
+    if (result.dailyLimit !== undefined) currentSettings.dailyLimit = result.dailyLimit;
+    if (result.breakReminder !== undefined) currentSettings.breakReminder = result.breakReminder;
+    if (result.focusMode !== undefined) currentSettings.focusMode = result.focusMode;
+    if (result.focusSensitivity !== undefined) {
+      currentSettings.focusSensitivity = result.focusSensitivity;
+      updateFocusModeSensitivity(result.focusSensitivity);
+    }
+    if (result.showOverlays !== undefined) currentSettings.showOverlays = result.showOverlays;
+    if (result.enabled !== undefined) currentSettings.enabled = result.enabled;
+    
+    console.log('✅ Settings refreshed:', currentSettings);
+    
+    // Update UI elements
+    const indicator = document.getElementById('doomscroll-indicator');
+    if (indicator) {
+      const limitElement = indicator.querySelector('.daily-limit');
+      if (limitElement) {
+        limitElement.textContent = `/${currentSettings.dailyLimit}m`;
+      }
+      updateUsageIndicator(dailyUsage, currentSettings.dailyLimit);
+    }
+    
+    // Force update the indicator
+    forceUpdateIndicator();
+    
+    // Handle focus mode changes
+    if (currentSettings.focusMode && !focusModeActive) {
+      console.log('🎯 Focus mode enabled during refresh - starting focus mode');
+      startFocusMode();
+    } else if (!currentSettings.focusMode && focusModeActive) {
+      console.log('⏹️ Focus mode disabled during refresh - stopping focus mode');
+      stopFocusMode();
+    }
+  });
+}
+
+// Listen for storage changes to automatically refresh settings
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync') {
+    console.log('🔄 Storage changed, refreshing settings...');
+    console.log('📝 Changes:', changes);
+    
+    // Check if any relevant settings changed
+    const relevantChanges = ['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled'];
+    const hasRelevantChanges = relevantChanges.some(key => changes[key]);
+    
+    if (hasRelevantChanges) {
+      console.log('⚙️ Relevant settings changed, refreshing...');
+      refreshSettings();
+    }
+  }
+});
 
 // Initialize content script
 function init() {
@@ -95,6 +160,12 @@ function init() {
       // Add visual indicators
       addUsageIndicator();
       
+      // Add a small delay before showing real data to ensure loading state is visible
+      setTimeout(() => {
+        forceUpdateIndicator();
+        console.log('✅ Loading state removed, showing real data');
+      }, 1000); // 1 second delay
+      
       // Start focus mode if enabled
       if (focusMode) {
         startFocusMode();
@@ -119,6 +190,12 @@ function init() {
         startTimeTracking(30, 15);
         addUsageIndicator();
         
+        // Add a small delay before showing real data
+        setTimeout(() => {
+          forceUpdateIndicator();
+          console.log('✅ Loading state removed (fallback), showing real data');
+        }, 1000); // 1 second delay
+        
         // Listen for page visibility changes
         document.addEventListener('visibilitychange', handleVisibilityChange);
         
@@ -132,6 +209,15 @@ function init() {
 // Track time spent on page with proper persistence
 function startTimeTracking(dailyLimit, breakReminder) {
   console.log('⏱️ Starting time tracking...');
+  
+  // Log page view event to backend
+  chrome.runtime.sendMessage({
+    action: 'logEvent',
+    eventType: 'page_view',
+    domain: window.location.hostname,
+    url: window.location.href,
+    duration: 0
+  });
   
   // Load existing daily usage from storage
   loadDailyUsage();
@@ -157,18 +243,24 @@ function startTimeTracking(dailyLimit, breakReminder) {
       }
       
       // Update usage indicator with total daily usage
-      updateUsageIndicator(dailyUsage, dailyLimit);
+      updateUsageIndicator(dailyUsage, currentSettings.dailyLimit);
+      
+      // Clear the settings update flag after updating
+      if (settingsJustUpdated) {
+        settingsJustUpdated = false;
+        console.log('✅ Settings update flag cleared');
+      }
       
       // Show break reminder
-      if (dailyUsage >= breakReminder && !reminderShown) {
+      if (dailyUsage >= currentSettings.breakReminder && !reminderShown) {
         showBreakReminder();
         reminderShown = true;
       }
       
       // Check daily limit
-      if (dailyUsage >= dailyLimit) {
-        showDailyLimitReached();
-      }
+      // if (dailyUsage >= currentSettings.dailyLimit) {
+      //   showDailyLimitReached();
+      // }
     }
   }, 1000); // Check every second
 }
@@ -286,16 +378,67 @@ function handleVisibilityChange() {
   }
 }
 
+// Function to remove loading state and show real data
+function removeLoadingState() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (indicator) {
+    indicator.classList.remove('loading');
+    console.log('✅ Removed loading state from indicator');
+  }
+}
+
+// Function to force update the usage indicator
+function forceUpdateIndicator() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (indicator) {
+    // Remove loading state
+    removeLoadingState();
+    
+    // Update the limit display
+    const limitElement = indicator.querySelector('.daily-limit');
+    if (limitElement) {
+      limitElement.textContent = `/${currentSettings.dailyLimit}m`;
+      console.log('✅ Updated indicator limit to:', currentSettings.dailyLimit);
+    }
+    
+    // Update the time display
+    const timeElement = indicator.querySelector('.time-spent');
+    if (timeElement) {
+      timeElement.textContent = `${Math.floor(dailyUsage)}m`;
+      console.log('✅ Updated indicator time to:', Math.floor(dailyUsage));
+    }
+    
+    // Force update background color immediately
+    const wholeMinutes = Math.floor(dailyUsage);
+    let newBackground = 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%)';
+    if (wholeMinutes >= currentSettings.dailyLimit) {
+      newBackground = 'linear-gradient(135deg, rgba(255, 107, 107, 0.95) 0%, rgba(255, 0, 0, 0.85) 100%)';
+    } else if (wholeMinutes >= currentSettings.dailyLimit * 0.8) {
+      newBackground = 'linear-gradient(135deg, rgba(255, 165, 0, 0.95) 0%, rgba(255, 140, 0, 0.85) 100%)';
+    } else if (wholeMinutes > 0) {
+      newBackground = 'linear-gradient(135deg, rgba(76, 205, 196, 0.95) 0%, rgba(78, 205, 196, 0.85) 100%)';
+    }
+    indicator.style.background = newBackground;
+    
+    console.log('✅ Force updated indicator with limit:', currentSettings.dailyLimit, 'and time:', wholeMinutes);
+  } else {
+    console.log('⚠️ No indicator found to update');
+  }
+}
+
 // Add usage indicator to the page
 function addUsageIndicator() {
   const indicator = document.createElement('div');
   indicator.id = 'doomscroll-indicator';
   indicator.innerHTML = `
     <div class="doomscroll-badge">
-      <span class="time-spent">0m</span>
-      <span class="daily-limit">/30m</span>
+      <span class="time-spent">...</span>
+      <span class="daily-limit">/...</span>
     </div>
   `;
+  
+  // Add loading class for styling
+  indicator.classList.add('loading');
   
   // Style the indicator
   indicator.style.cssText = `
@@ -350,6 +493,9 @@ function addUsageIndicator() {
 function updateUsageIndicator(timeSpent, dailyLimit) {
   const indicator = document.getElementById('doomscroll-indicator');
   if (!indicator) return;
+  
+  // Remove loading state if present
+  removeLoadingState();
   
   // Ensure timeSpent is a whole number
   const wholeMinutes = Math.floor(timeSpent);
@@ -443,6 +589,15 @@ function makeDraggable(element) {
 
 // Show break reminder
 function showBreakReminder() {
+  // Log break reminder event to backend
+  chrome.runtime.sendMessage({
+    action: 'logEvent',
+    eventType: 'break_reminder',
+    domain: window.location.hostname,
+    url: window.location.href,
+    duration: dailyUsage
+  });
+  
   const reminder = document.createElement('div');
   reminder.id = 'doomscroll-reminder';
   reminder.innerHTML = `
@@ -484,6 +639,15 @@ function showBreakReminder() {
 
 // Show daily limit reached message
 function showDailyLimitReached() {
+  // Log daily limit reached event to backend
+  chrome.runtime.sendMessage({
+    action: 'logEvent',
+    eventType: 'daily_limit_reached',
+    domain: window.location.hostname,
+    url: window.location.href,
+    duration: dailyUsage
+  });
+  
   const limitMessage = document.createElement('div');
   limitMessage.id = 'doomscroll-limit';
   limitMessage.innerHTML = `
@@ -554,28 +718,70 @@ function handleMessage(request, sender, sendResponse) {
   
   if (request.action === 'settingsUpdated') {
     console.log('⚙️ Settings updated in content script:', request.settings);
-    // Update the daily limit and break reminder
-    const { dailyLimit, breakReminder, enabled, focusMode } = request.settings;
-    console.log('📊 New settings - Daily limit:', dailyLimit, 'Break reminder:', breakReminder, 'Enabled:', enabled, 'Focus mode:', focusMode);
+    
+    // Set flag to prevent time tracking from overriding
+    settingsJustUpdated = true;
+    
+    // Update current settings with new values
+    if (request.settings.dailyLimit !== undefined) {
+      currentSettings.dailyLimit = request.settings.dailyLimit;
+      console.log('📊 Updated daily limit:', currentSettings.dailyLimit);
+    }
+    
+    if (request.settings.breakReminder !== undefined) {
+      currentSettings.breakReminder = request.settings.breakReminder;
+      console.log('⏰ Updated break reminder:', currentSettings.breakReminder);
+    }
+    
+    if (request.settings.focusMode !== undefined) {
+      currentSettings.focusMode = request.settings.focusMode;
+      console.log('🎯 Updated focus mode:', currentSettings.focusMode);
+    }
+    
+    if (request.settings.focusSensitivity !== undefined) {
+      currentSettings.focusSensitivity = request.settings.focusSensitivity;
+      updateFocusModeSensitivity(request.settings.focusSensitivity);
+      console.log('⚡ Updated focus sensitivity:', currentSettings.focusSensitivity);
+    }
+    
+    if (request.settings.showOverlays !== undefined) {
+      currentSettings.showOverlays = request.settings.showOverlays;
+      console.log('👁️ Updated show overlays:', currentSettings.showOverlays);
+    }
     
     // Update the usage indicator with new limit
     const indicator = document.getElementById('doomscroll-indicator');
     if (indicator) {
       const limitElement = indicator.querySelector('.daily-limit');
       if (limitElement) {
-        limitElement.textContent = `/${dailyLimit}m`;
-        console.log('✅ Updated usage indicator with new limit:', dailyLimit);
+        limitElement.textContent = `/${currentSettings.dailyLimit}m`;
+        console.log('✅ Updated usage indicator with new limit:', currentSettings.dailyLimit);
       }
+      
+      // Update the current usage display
+      updateUsageIndicator(dailyUsage, currentSettings.dailyLimit);
     }
     
+    // Force update the indicator to ensure it's properly updated
+    forceUpdateIndicator();
+    
     // Handle focus mode changes
-    if (focusMode && !focusModeActive) {
+    if (currentSettings.focusMode && !focusModeActive) {
       console.log('🎯 Focus mode enabled - starting focus mode');
       startFocusMode();
-    } else if (!focusMode && focusModeActive) {
+    } else if (!currentSettings.focusMode && focusModeActive) {
       console.log('⏹️ Focus mode disabled - stopping focus mode');
       stopFocusMode();
     }
+    
+    // Reset reminder flags if break reminder changed
+    if (request.settings.breakReminder !== undefined) {
+      reminderShown = false;
+      console.log('🔄 Reset reminder flag for new break reminder setting');
+    }
+    
+    sendResponse({ success: true });
+    return true;
   }
   
   if (request.action === 'websitesUpdated') {
@@ -611,31 +817,6 @@ function handleMessage(request, sender, sendResponse) {
     }
   }
   
-  if (request.action === 'settingsUpdated') {
-    console.log('⚙️ Settings updated:', request.settings);
-    
-    // Update current settings
-    if (request.settings.focusSensitivity) {
-      currentSettings.focusSensitivity = request.settings.focusSensitivity;
-      updateFocusModeSensitivity(request.settings.focusSensitivity);
-    }
-    
-    if (request.settings.showOverlays !== undefined) {
-      currentSettings.showOverlays = request.settings.showOverlays;
-    }
-    
-    if (request.settings.focusMode !== undefined) {
-      currentSettings.focusMode = request.settings.focusMode;
-      if (request.settings.focusMode) {
-        startFocusMode();
-      } else {
-        stopFocusMode();
-      }
-    }
-    
-    console.log('✅ Settings updated successfully');
-  }
-  
   if (request.action === 'backgroundLog') {
     console.log(`[Background] ${request.message}`);
     // Optionally show as toast notification
@@ -643,11 +824,28 @@ function handleMessage(request, sender, sendResponse) {
       showToastMessage(request.message, request.type);
     }
   }
+  
+  if (request.action === 'refreshSettings') {
+    console.log('🔄 Refreshing settings from storage...');
+    refreshSettings();
+    sendResponse({ success: true });
+    return true;
+  }
 }
 
 // Focus mode functions with improved stability
 function startFocusMode() {
   console.log('🎯 Starting focus mode...');
+  
+  // Log focus mode start event to backend
+  chrome.runtime.sendMessage({
+    action: 'logEvent',
+    eventType: 'focus_mode_started',
+    domain: window.location.hostname,
+    url: window.location.href,
+    duration: dailyUsage
+  });
+  
   focusModeActive = true;
   focusModeAlertShown = false;
   focusModeState.lastAlertTime = 0;
@@ -732,6 +930,15 @@ function showFocusModeAlert() {
     console.log('⏳ Alert cooldown active, skipping...');
     return;
   }
+  
+  // Log focus mode alert event to backend
+  chrome.runtime.sendMessage({
+    action: 'logEvent',
+    eventType: 'focus_mode_alert',
+    domain: window.location.hostname,
+    url: window.location.href,
+    duration: dailyUsage
+  });
   
   // Check if overlays are disabled
   if (!currentSettings.showOverlays) {

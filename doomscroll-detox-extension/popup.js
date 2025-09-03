@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const saveButton = document.getElementById('save-settings');
     const resetButton = document.getElementById('reset-today');
+    const refreshButton = document.getElementById('refresh-settings');
     const toggleCheckbox = document.getElementById('enabled-toggle');
     
     console.log('🔍 Button elements found:', {
@@ -40,6 +41,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (resetButton) {
         resetButton.addEventListener('click', resetToday);
         console.log('✅ Reset button event listener added');
+    }
+    
+    if (refreshButton) {
+        refreshButton.addEventListener('click', function() {
+            console.log('🔄 Refresh button clicked!');
+            refreshAllContentScripts();
+            showMessage('Settings refreshed on all tabs!', 'success');
+        });
+        console.log('✅ Refresh button event listener added');
     }
     
     if (toggleCheckbox) {
@@ -123,6 +133,9 @@ function loadSettings() {
     loadWebsiteList(monitoredWebsites);
     
     console.log('✅ Settings loaded and form updated');
+    
+    // Refresh all content scripts to ensure they have the latest settings
+    refreshAllContentScripts();
   });
 }
 
@@ -242,10 +255,35 @@ function saveSettings() {
             chrome.tabs.sendMessage(tab.id, {
               action: 'settingsUpdated',
               settings: { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays }
+            }, (response) => {
+              if (chrome.runtime.lastError) {
+                console.log('⚠️ Content script not ready on tab:', tab.url);
+              } else {
+                console.log('✅ Settings update sent successfully to:', tab.url);
+              }
             });
           }
         });
       });
+    });
+  });
+}
+
+// Function to refresh all content scripts
+function refreshAllContentScripts() {
+  console.log('🔄 Refreshing all content scripts...');
+  
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && isSocialMediaSite(tab.url)) {
+        chrome.tabs.sendMessage(tab.id, { action: 'refreshSettings' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('⚠️ Content script not ready on tab:', tab.url);
+          } else {
+            console.log('✅ Settings refresh sent to:', tab.url);
+          }
+        });
+      }
     });
   });
 }

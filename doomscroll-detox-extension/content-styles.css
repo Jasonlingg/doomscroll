@@ -23,6 +23,26 @@
   transition: all 0.3s ease !important;
 }
 
+/* Loading state for indicator */
+#doomscroll-indicator.loading {
+  background: linear-gradient(135deg, rgba(100, 100, 100, 0.95) 0%, rgba(80, 80, 80, 0.85) 100%) !important;
+  animation: pulse 1.5s ease-in-out infinite !important;
+}
+
+#doomscroll-indicator.loading .time-spent,
+#doomscroll-indicator.loading .daily-limit {
+  opacity: 0.7 !important;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 #doomscroll-indicator:hover {
   transform: scale(1.05) !important;
   box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5), 0 3px 12px rgba(0, 0, 0, 0.3) !important;
