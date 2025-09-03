@@ -30,6 +30,7 @@ let currentSettings = {
 let sessionStartTime = Date.now();
 let lastMinuteCompleted = 0;
 let settingsJustUpdated = false; // Flag to prevent override during settings update
+let loadingStateRemoved = false; // Flag to track if loading state has been removed
 
 // Function to refresh settings from storage
 function refreshSettings() {
@@ -316,6 +317,44 @@ function loadDailyUsage() {
   });
 }
 
+// Function to sync usage data with backend
+async function syncUsageWithBackend() {
+  try {
+    console.log('📤 Syncing usage data with backend...');
+    
+    const response = await fetch('http://127.0.0.1:8000/api/v1/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        events: [{
+          user_id: 'user_123', // This should be the actual user ID
+          event_type: 'usage_sync',
+          domain: window.location.hostname,
+          url: window.location.href,
+          duration: dailyUsage,
+          extension_version: '1.0.0',
+          browser: 'Chrome',
+          metadata: {
+            daily_limit: currentSettings.dailyLimit,
+            break_reminder: currentSettings.breakReminder,
+            timestamp: Date.now()
+          }
+        }]
+      })
+    });
+    
+    if (response.ok) {
+      console.log('✅ Usage data synced with backend');
+    } else {
+      console.log('⚠️ Failed to sync with backend, continuing with local storage');
+    }
+  } catch (error) {
+    console.log('⚠️ Backend sync failed, using local storage only:', error);
+  }
+}
+
 // Save daily usage to storage with error handling
 function saveDailyUsage() {
   // Ensure we save whole numbers
@@ -330,11 +369,15 @@ function saveDailyUsage() {
         saveToLocalStorage(wholeMinutes);
       } else {
         console.log('💾 Saved daily usage to chrome.storage:', wholeMinutes, 'minutes');
+        // Also sync with backend (non-blocking)
+        syncUsageWithBackend();
       }
     });
   } else {
     // Fallback to localStorage
     saveToLocalStorage(wholeMinutes);
+    // Also sync with backend (non-blocking)
+    syncUsageWithBackend();
   }
 }
 
@@ -381,8 +424,9 @@ function handleVisibilityChange() {
 // Function to remove loading state and show real data
 function removeLoadingState() {
   const indicator = document.getElementById('doomscroll-indicator');
-  if (indicator) {
+  if (indicator && !loadingStateRemoved) {
     indicator.classList.remove('loading');
+    loadingStateRemoved = true;
     console.log('✅ Removed loading state from indicator');
   }
 }
@@ -440,6 +484,9 @@ function addUsageIndicator() {
   // Add loading class for styling
   indicator.classList.add('loading');
   
+  // Reset loading state flag for new indicator
+  loadingStateRemoved = false;
+  
   // Style the indicator
   indicator.style.cssText = `
     position: fixed;
@@ -494,8 +541,10 @@ function updateUsageIndicator(timeSpent, dailyLimit) {
   const indicator = document.getElementById('doomscroll-indicator');
   if (!indicator) return;
   
-  // Remove loading state if present
-  removeLoadingState();
+  // Remove loading state if present and not already removed
+  if (!loadingStateRemoved) {
+    removeLoadingState();
+  }
   
   // Ensure timeSpent is a whole number
   const wholeMinutes = Math.floor(timeSpent);

@@ -2,3 +2,8 @@
 .venv/
 venv/
 ENV/
+
+# SQLite database
+*.db
+*.sqlite3
+*.sqlite
