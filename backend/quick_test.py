@@ -1,0 +1,1 @@
+from sqlalchemy import create_engine, text; engine = create_engine("sqlite:///./doomscroll_detox.db"); conn = engine.connect(); result = conn.execute(text("SELECT COUNT(*) FROM users")); print(f"Users: {result.fetchone()[0]}"); conn.close()
