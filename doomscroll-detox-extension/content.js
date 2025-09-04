@@ -32,49 +32,65 @@ let lastMinuteCompleted = 0;
 let settingsJustUpdated = false; // Flag to prevent override during settings update
 let loadingStateRemoved = false; // Flag to track if loading state has been removed
 
-// Function to refresh settings from storage
+// Function to refresh settings from backend
 function refreshSettings() {
-  console.log('🔄 Refreshing settings from storage...');
+  console.log('🔄 Refreshing settings from backend...');
   
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled'], (result) => {
-    if (chrome.runtime.lastError) {
-      console.error('❌ Storage access error during refresh:', chrome.runtime.lastError);
-      return;
-    }
-    
-    // Update current settings
-    if (result.dailyLimit !== undefined) currentSettings.dailyLimit = result.dailyLimit;
-    if (result.breakReminder !== undefined) currentSettings.breakReminder = result.breakReminder;
-    if (result.focusMode !== undefined) currentSettings.focusMode = result.focusMode;
-    if (result.focusSensitivity !== undefined) {
-      currentSettings.focusSensitivity = result.focusSensitivity;
-      updateFocusModeSensitivity(result.focusSensitivity);
-    }
-    if (result.showOverlays !== undefined) currentSettings.showOverlays = result.showOverlays;
-    if (result.enabled !== undefined) currentSettings.enabled = result.enabled;
-    
-    console.log('✅ Settings refreshed:', currentSettings);
-    
-    // Update UI elements
-    const indicator = document.getElementById('doomscroll-indicator');
-    if (indicator) {
-      const limitElement = indicator.querySelector('.daily-limit');
-      if (limitElement) {
-        limitElement.textContent = `/${currentSettings.dailyLimit}m`;
+  // Request settings from background script (which will get from backend)
+  chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
+    if (response && response.success) {
+      console.log('📥 Retrieved settings from backend:', response.settings);
+      
+      // Update current settings
+      if (response.settings.dailyLimit !== undefined) currentSettings.dailyLimit = response.settings.dailyLimit;
+      if (response.settings.breakReminder !== undefined) currentSettings.breakReminder = response.settings.breakReminder;
+      if (response.settings.focusMode !== undefined) currentSettings.focusMode = response.settings.focusMode;
+      if (response.settings.focusSensitivity !== undefined) {
+        currentSettings.focusSensitivity = response.settings.focusSensitivity;
+        updateFocusModeSensitivity(response.settings.focusSensitivity);
       }
-      updateUsageIndicator(dailyUsage, currentSettings.dailyLimit);
-    }
-    
-    // Force update the indicator
-    forceUpdateIndicator();
-    
-    // Handle focus mode changes
-    if (currentSettings.focusMode && !focusModeActive) {
-      console.log('🎯 Focus mode enabled during refresh - starting focus mode');
-      startFocusMode();
-    } else if (!currentSettings.focusMode && focusModeActive) {
-      console.log('⏹️ Focus mode disabled during refresh - stopping focus mode');
-      stopFocusMode();
+      if (response.settings.showOverlays !== undefined) currentSettings.showOverlays = response.settings.showOverlays;
+      if (response.settings.enabled !== undefined) currentSettings.enabled = response.settings.enabled;
+      
+      console.log('✅ Settings refreshed from backend:', currentSettings);
+      
+      // Update UI elements
+      const indicator = document.getElementById('doomscroll-indicator');
+      if (indicator) {
+        const limitElement = indicator.querySelector('.daily-limit');
+        if (limitElement) {
+          limitElement.textContent = `/${currentSettings.dailyLimit}m`;
+        }
+        updateUsageIndicator(dailyUsage, currentSettings.dailyLimit);
+      }
+      
+      // Force update the indicator
+      forceUpdateIndicator();
+      
+      // Handle focus mode changes
+      if (currentSettings.focusMode && !focusModeActive) {
+        console.log('🎯 Focus mode enabled during refresh - starting focus mode');
+        startFocusMode();
+      } else if (!currentSettings.focusMode && focusModeActive) {
+        console.log('⏹️ Focus mode disabled during refresh - stopping focus mode');
+        stopFocusMode();
+      }
+    } else {
+      console.error('❌ Failed to load settings from backend, using local fallback');
+      // Fallback to local storage
+      chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled'], (result) => {
+        if (result.dailyLimit !== undefined) currentSettings.dailyLimit = result.dailyLimit;
+        if (result.breakReminder !== undefined) currentSettings.breakReminder = result.breakReminder;
+        if (result.focusMode !== undefined) currentSettings.focusMode = result.focusMode;
+        if (result.focusSensitivity !== undefined) {
+          currentSettings.focusSensitivity = result.focusSensitivity;
+          updateFocusModeSensitivity(result.focusSensitivity);
+        }
+        if (result.showOverlays !== undefined) currentSettings.showOverlays = result.showOverlays;
+        if (result.enabled !== undefined) currentSettings.enabled = result.enabled;
+        
+        console.log('✅ Settings refreshed from local storage:', currentSettings);
+      });
     }
   });
 }
@@ -109,100 +125,145 @@ function init() {
     return;
   }
   
-  // Get current daily usage from storage
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
-    if (chrome.runtime.lastError) {
-      console.error('❌ Storage access error during init:', chrome.runtime.lastError);
-      // Use default settings and localStorage fallback
-      currentSettings = { dailyLimit: 30, breakReminder: 15, enabled: true, focusMode: false, focusSensitivity: 'medium', showOverlays: true };
-      startTimeTracking(30, 15);
-      addUsageIndicator();
-      return;
-    }
-    
-    const dailyLimit = result.dailyLimit || 30;
-    const breakReminder = result.breakReminder || 15;
-    const focusMode = result.focusMode || false;
-    const focusSensitivity = result.focusSensitivity || 'medium';
-    const showOverlays = result.showOverlays !== false; // Default to true
-    const monitoredWebsites = result.monitoredWebsites || [];
-    
-    // Update current settings
-    currentSettings = { dailyLimit, breakReminder, enabled: true, focusMode, focusSensitivity, showOverlays };
-    
-    // Update focus mode cooldown based on sensitivity
-    updateFocusModeSensitivity(focusSensitivity);
-    
-    console.log('🚀 Initializing content script with settings:', currentSettings);
-    console.log('📋 Monitored websites:', monitoredWebsites);
-    
-    // Check if current site is monitored
-    const currentSite = window.location.hostname;
-    const currentUrl = window.location.href;
-    console.log('🔍 Checking site:', currentSite, 'URL:', currentUrl);
-    
-    // More robust matching - check both hostname and full URL
-    const isMonitored = monitoredWebsites.some(site => {
-      if (!site.enabled) return false;
+  // Load settings from backend first
+  chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
+    if (response && response.success) {
+      console.log('📥 Retrieved settings from backend during init:', response.settings);
       
-      const domainMatch = currentSite.includes(site.domain) || currentUrl.includes(site.domain);
-      console.log(`  ${site.name} (${site.domain}): enabled=${site.enabled}, match=${domainMatch}`);
-      return domainMatch;
-    });
-    
-    console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
-    
-    if (isMonitored) {
-      console.log('✅ Site is monitored, starting tracking...');
+      const dailyLimit = response.settings.dailyLimit || 30;
+      const breakReminder = response.settings.breakReminder || 15;
+      const focusMode = response.settings.focusMode || false;
+      const focusSensitivity = response.settings.focusSensitivity || 'medium';
+      const showOverlays = response.settings.showOverlays !== false; // Default to true
+      const monitoredWebsites = response.settings.monitoredWebsites || [];
       
-      // Start tracking time
-      startTimeTracking(dailyLimit, breakReminder);
+      // Update current settings
+      currentSettings = { dailyLimit, breakReminder, enabled: true, focusMode, focusSensitivity, showOverlays };
       
-      // Add visual indicators
-      addUsageIndicator();
+      // Update focus mode cooldown based on sensitivity
+      updateFocusModeSensitivity(focusSensitivity);
       
-      // Add a small delay before showing real data to ensure loading state is visible
-      setTimeout(() => {
-        forceUpdateIndicator();
-        console.log('✅ Loading state removed, showing real data');
-      }, 1000); // 1 second delay
+      console.log('🚀 Initializing content script with backend settings:', currentSettings);
+      console.log('📋 Monitored websites:', monitoredWebsites);
       
-      // Start focus mode if enabled
-      if (focusMode) {
-        startFocusMode();
-      }
+      // Check if current site is monitored
+      const currentSite = window.location.hostname;
+      const currentUrl = window.location.href;
+      console.log('🔍 Checking site:', currentSite, 'URL:', currentUrl);
       
-      // Listen for page visibility changes
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      // Listen for messages from background script
-      chrome.runtime.onMessage.addListener(handleMessage);
-    } else {
-      console.log('❌ Site is not monitored, content script will not run');
-      
-      // Fallback: check if this is a known social media site even if settings aren't loaded
-      const fallbackSites = ['youtube.com', 'x.com', 'twitter.com', 'facebook.com', 'instagram.com', 'tiktok.com', 'reddit.com', 'linkedin.com'];
-      const isFallbackSite = fallbackSites.some(site => currentSite.includes(site));
-      
-      if (isFallbackSite) {
-        console.log('🔄 Fallback: Known site detected, starting with default settings...');
+      // More robust matching - check both hostname and full URL
+      const isMonitored = monitoredWebsites.some(site => {
+        if (!site.enabled) return false;
         
-        // Start tracking with default settings
-        startTimeTracking(30, 15);
+        const domainMatch = currentSite.includes(site.domain) || currentUrl.includes(site.domain);
+        console.log(`  ${site.name} (${site.domain}): enabled=${site.enabled}, match=${domainMatch}`);
+        return domainMatch;
+      });
+      
+      console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
+      
+      if (isMonitored) {
+        console.log('✅ Site is monitored, starting tracking...');
+        
+        // Start tracking time
+        startTimeTracking(dailyLimit, breakReminder);
+        
+        // Add visual indicators
         addUsageIndicator();
         
-        // Add a small delay before showing real data
+        // Add a small delay before showing real data to ensure loading state is visible
         setTimeout(() => {
           forceUpdateIndicator();
-          console.log('✅ Loading state removed (fallback), showing real data');
+          console.log('✅ Loading state removed, showing real data');
         }, 1000); // 1 second delay
+        
+        // Start focus mode if enabled
+        if (focusMode) {
+          startFocusMode();
+        }
         
         // Listen for page visibility changes
         document.addEventListener('visibilitychange', handleVisibilityChange);
         
         // Listen for messages from background script
         chrome.runtime.onMessage.addListener(handleMessage);
+      } else {
+        console.log('❌ Site is not monitored, content script will not run');
       }
+    } else {
+      console.error('❌ Failed to load settings from backend, using local fallback');
+      // Fallback to local storage
+      chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
+        if (chrome.runtime.lastError) {
+          console.error('❌ Storage access error during init:', chrome.runtime.lastError);
+          // Use default settings and localStorage fallback
+          currentSettings = { dailyLimit: 30, breakReminder: 15, enabled: true, focusMode: false, focusSensitivity: 'medium', showOverlays: true };
+          startTimeTracking(30, 15);
+          addUsageIndicator();
+          return;
+        }
+        
+        const dailyLimit = result.dailyLimit || 30;
+        const breakReminder = result.breakReminder || 15;
+        const focusMode = result.focusMode || false;
+        const focusSensitivity = result.focusSensitivity || 'medium';
+        const showOverlays = result.showOverlays !== false; // Default to true
+        const monitoredWebsites = result.monitoredWebsites || [];
+        
+        // Update current settings
+        currentSettings = { dailyLimit, breakReminder, enabled: true, focusMode, focusSensitivity, showOverlays };
+        
+        // Update focus mode cooldown based on sensitivity
+        updateFocusModeSensitivity(focusSensitivity);
+        
+        console.log('🚀 Initializing content script with local settings:', currentSettings);
+        console.log('📋 Monitored websites:', monitoredWebsites);
+        
+        // Check if current site is monitored
+        const currentSite = window.location.hostname;
+        const currentUrl = window.location.href;
+        console.log('🔍 Checking site:', currentSite, 'URL:', currentUrl);
+        
+        // More robust matching - check both hostname and full URL
+        const isMonitored = monitoredWebsites.some(site => {
+          if (!site.enabled) return false;
+          
+          const domainMatch = currentSite.includes(site.domain) || currentUrl.includes(site.domain);
+          console.log(`  ${site.name} (${site.domain}): enabled=${site.enabled}, match=${domainMatch}`);
+          return domainMatch;
+        });
+        
+        console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
+        
+        if (isMonitored) {
+          console.log('✅ Site is monitored, starting tracking...');
+          
+          // Start tracking time
+          startTimeTracking(dailyLimit, breakReminder);
+          
+          // Add visual indicators
+          addUsageIndicator();
+          
+          // Add a small delay before showing real data to ensure loading state is visible
+          setTimeout(() => {
+            forceUpdateIndicator();
+            console.log('✅ Loading state removed, showing real data');
+          }, 1000); // 1 second delay
+          
+          // Start focus mode if enabled
+          if (focusMode) {
+            startFocusMode();
+          }
+          
+          // Listen for page visibility changes
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+          
+          // Listen for messages from background script
+          chrome.runtime.onMessage.addListener(handleMessage);
+        } else {
+          console.log('❌ Site is not monitored, content script will not run');
+        }
+      });
     }
   });
 }
@@ -454,13 +515,13 @@ function forceUpdateIndicator() {
     
     // Force update background color immediately
     const wholeMinutes = Math.floor(dailyUsage);
-    let newBackground = 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%)';
+    let newBackground = '#4facfe'; // Default blue
     if (wholeMinutes >= currentSettings.dailyLimit) {
-      newBackground = 'linear-gradient(135deg, rgba(255, 107, 107, 0.95) 0%, rgba(255, 0, 0, 0.85) 100%)';
+      newBackground = '#ff6b6b'; // Red for limit reached
     } else if (wholeMinutes >= currentSettings.dailyLimit * 0.8) {
-      newBackground = 'linear-gradient(135deg, rgba(255, 165, 0, 0.95) 0%, rgba(255, 140, 0, 0.85) 100%)';
+      newBackground = '#ffd93d'; // Yellow for warning
     } else if (wholeMinutes > 0) {
-      newBackground = 'linear-gradient(135deg, rgba(76, 205, 196, 0.95) 0%, rgba(78, 205, 196, 0.85) 100%)';
+      newBackground = '#4ecdc4'; // Teal when active
     }
     indicator.style.background = newBackground;
     
@@ -486,52 +547,6 @@ function addUsageIndicator() {
   
   // Reset loading state flag for new indicator
   loadingStateRemoved = false;
-  
-  // Style the indicator
-  indicator.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 10000;
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%);
-    color: white;
-    padding: 12px 16px;
-    border-radius: 25px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 16px;
-    font-weight: 600;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
-    cursor: move;
-    user-select: none;
-    min-width: 100px;
-    text-align: center;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.3s ease;
-  `;
-  
-  // Make it draggable
-  makeDraggable(indicator);
-  
-  // Add hover effect
-  indicator.addEventListener('mouseenter', () => {
-    if (!indicator.classList.contains('dragging')) {
-      const currentTransform = indicator.style.transform || 'translate3d(0px, 0px, 0px)';
-      indicator.style.transform = currentTransform + ' scale(1.05)';
-      indicator.style.boxShadow = '0 6px 25px rgba(0, 0, 0, 0.5), 0 3px 12px rgba(0, 0, 0, 0.3)';
-    }
-  });
-  
-  indicator.addEventListener('mouseleave', () => {
-    if (!indicator.classList.contains('dragging')) {
-      const currentTransform = indicator.style.transform || 'translate3d(0px, 0px, 0px)';
-      // Remove scale but keep the translate part
-      const translateMatch = currentTransform.match(/translate3d\([^)]+\)/);
-      const translatePart = translateMatch ? translateMatch[0] : 'translate3d(0px, 0px, 0px)';
-      indicator.style.transform = translatePart;
-      indicator.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2)';
-    }
-  });
   
   document.body.appendChild(indicator);
 }
@@ -564,18 +579,21 @@ function updateUsageIndicator(timeSpent, dailyLimit) {
   }
   
   // Determine new background color
-  let newBackground = 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%)'; // Default
+  let newBackground = '#4facfe'; // Default blue
+  
   if (wholeMinutes >= dailyLimit) {
-    newBackground = 'linear-gradient(135deg, rgba(255, 107, 107, 0.95) 0%, rgba(255, 0, 0, 0.85) 100%)'; // Red gradient
+    newBackground = '#ff6b6b'; // Red for limit reached
   } else if (wholeMinutes >= dailyLimit * 0.8) {
-    newBackground = 'linear-gradient(135deg, rgba(255, 165, 0, 0.95) 0%, rgba(255, 140, 0, 0.85) 100%)'; // Orange gradient
+    newBackground = '#ffd93d'; // Yellow for warning
   } else if (wholeMinutes > 0) {
-    newBackground = 'linear-gradient(135deg, rgba(76, 205, 196, 0.95) 0%, rgba(78, 205, 196, 0.85) 100%)'; // Teal gradient when active
+    newBackground = '#4ecdc4'; // Teal when active
   }
   
   // Only update background if it changed
   if (indicator.style.background !== newBackground) {
-    updates.push(() => indicator.style.background = newBackground);
+    updates.push(() => {
+      indicator.style.background = newBackground;
+    });
   }
   
   // Batch all updates in one frame
@@ -583,56 +601,6 @@ function updateUsageIndicator(timeSpent, dailyLimit) {
     requestAnimationFrame(() => {
       updates.forEach(update => update());
     });
-  }
-}
-
-// Simple draggable function
-function makeDraggable(element) {
-  let isDragging = false;
-  let currentX;
-  let currentY;
-  let initialX;
-  let initialY;
-  let xOffset = 0;
-  let yOffset = 0;
-
-  element.addEventListener('mousedown', dragStart);
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('mouseup', dragEnd);
-
-  function dragStart(e) {
-    initialX = e.clientX - xOffset;
-    initialY = e.clientY - yOffset;
-    
-    if (e.target === element || element.contains(e.target)) {
-      isDragging = true;
-      // Remove hover effect while dragging
-      element.classList.add('dragging');
-    }
-  }
-
-  function drag(e) {
-    if (isDragging) {
-      e.preventDefault();
-      
-      currentX = e.clientX - initialX;
-      currentY = e.clientY - initialY;
-      
-      xOffset = currentX;
-      yOffset = currentY;
-      
-      // Use translate3d for better performance and to avoid conflicts with scale
-      element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-    }
-  }
-
-  function dragEnd() {
-    initialX = currentX;
-    initialY = currentY;
-    isDragging = false;
-    
-    // Remove dragging class to restore hover effects
-    element.classList.remove('dragging');
   }
 }
 

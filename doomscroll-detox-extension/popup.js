@@ -103,39 +103,56 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Event listeners setup complete');
 });
 
-// Load current settings from storage
+// Load current settings from storage (only if not already loaded)
 function loadSettings() {
-  console.log('📂 Loading settings from storage...');
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'enabled', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
-    console.log('📥 Retrieved settings from storage:', result);
-    
-    const dailyLimit = result.dailyLimit || 30;
-    const breakReminder = result.breakReminder || 15;
-    const enabled = result.enabled !== false; // Default to true
-    const focusMode = result.focusMode || false;
-    const focusSensitivity = result.focusSensitivity || 'medium';
-    const showOverlays = result.showOverlays !== false; // Default to true
-    const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
-    
-    console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays, monitoredWebsites });
-    
-    document.getElementById('daily-limit-input').value = dailyLimit;
-    document.getElementById('break-reminder-input').value = breakReminder;
-    document.getElementById('enabled-toggle').checked = enabled;
-    document.getElementById('focus-mode-toggle').checked = focusMode;
-    document.getElementById('focus-sensitivity').value = focusSensitivity;
-    document.getElementById('overlay-toggle').checked = showOverlays;
-    
-    // Update display
-    document.getElementById('daily-limit').textContent = dailyLimit + 'm';
-    
-    // Load website list
-    loadWebsiteList(monitoredWebsites);
-    
-    console.log('✅ Settings loaded and form updated');
-    
-    // Refresh all content scripts to ensure they have the latest settings
-    refreshAllContentScripts();
+  console.log('📂 Loading settings...');
+  
+  // Check if we already have settings loaded
+  const dailyLimitInput = document.getElementById('daily-limit-input');
+  if (dailyLimitInput && dailyLimitInput.value) {
+    console.log('✅ Settings already loaded, skipping...');
+    return;
+  }
+  
+  // Request settings from background script (which will try backend first)
+  chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
+    if (response && response.success) {
+      console.log('📥 Retrieved settings:', response.settings);
+      
+      const dailyLimit = response.settings.dailyLimit || 30;
+      const breakReminder = response.settings.breakReminder || 15;
+      const enabled = response.settings.enabled !== false; // Default to true
+      const focusMode = response.settings.focusMode || false;
+      const focusSensitivity = response.settings.focusSensitivity || 'medium';
+      const showOverlays = response.settings.showOverlays !== false; // Default to true
+      const monitoredWebsites = response.settings.monitoredWebsites || getDefaultWebsites();
+      
+      console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays, monitoredWebsites });
+      
+      document.getElementById('daily-limit-input').value = dailyLimit;
+      document.getElementById('break-reminder-input').value = breakReminder;
+      document.getElementById('enabled-toggle').checked = enabled;
+      document.getElementById('focus-mode-toggle').checked = focusMode;
+      document.getElementById('focus-sensitivity').value = focusSensitivity;
+      document.getElementById('overlay-toggle').checked = showOverlays;
+      
+      // Update display
+      document.getElementById('daily-limit').textContent = dailyLimit + 'm';
+      
+      // Load website list
+      loadWebsiteList(monitoredWebsites);
+      
+      console.log('✅ Settings loaded and form updated');
+      console.log('🌐 Settings source:', response.fromBackend ? 'Backend' : 'Local storage');
+      
+      // Only refresh content scripts if settings came from backend
+      if (response.fromBackend !== false) {
+        refreshAllContentScripts();
+      }
+    } else {
+      console.error('❌ Failed to load settings');
+      showMessage('Failed to load settings', 'error');
+    }
   });
 }
 
@@ -172,6 +189,27 @@ function loadStats() {
             });
         }
     });
+}
+
+// Update all display elements after settings change
+function refreshDisplayElements() {
+  console.log('🔄 Refreshing all display elements...');
+  
+  // Get current values from form
+  const dailyLimit = parseInt(document.getElementById('daily-limit-input').value) || 30;
+  const breakReminder = parseInt(document.getElementById('break-reminder-input').value) || 15;
+  
+  // Update daily limit display
+  document.getElementById('daily-limit').textContent = dailyLimit + 'm';
+  
+  // Update usage display with current usage and new daily limit
+  chrome.storage.sync.get(['dailyUsage'], (result) => {
+    const currentUsage = result.dailyUsage || 0;
+    updateUsageDisplay(currentUsage);
+    console.log('📊 Updated usage display with new settings');
+  });
+  
+  console.log('✅ All display elements refreshed');
 }
 
 // Update usage display
@@ -223,28 +261,31 @@ function saveSettings() {
     return;
   }
   
-  console.log('✅ Validation passed, saving to storage...');
+  console.log('✅ Validation passed, saving to backend...');
   
   // Get current monitored websites
-  chrome.storage.sync.get(['monitoredWebsites'], (result) => {
-    const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
-    
-    // Save to storage
-    chrome.storage.sync.set({
-      dailyLimit: dailyLimit,
-      breakReminder: breakReminder,
-      enabled: enabled,
-      focusMode: focusMode,
-      focusSensitivity: focusSensitivity,
-      showOverlays: showOverlays,
-      monitoredWebsites: monitoredWebsites
-    }, () => {
-      console.log('✅ Settings saved to storage successfully');
+  const monitoredWebsites = getCurrentWebsites();
+  
+  // Save settings via background script (which will save to backend)
+  const settings = {
+    dailyLimit: dailyLimit,
+    breakReminder: breakReminder,
+    enabled: enabled,
+    focusMode: focusMode,
+    focusSensitivity: focusSensitivity,
+    showOverlays: showOverlays,
+    monitoredWebsites: monitoredWebsites
+  };
+  
+  chrome.runtime.sendMessage({ action: 'updateSettings', settings: settings }, (response) => {
+    if (response && response.success) {
+      console.log('✅ Settings saved successfully');
+      console.log('🌐 Backend saved:', response.backendSaved ? 'Yes' : 'No');
+      
       showMessage('Settings saved successfully!', 'success');
       
-      // Update display
-      document.getElementById('daily-limit').textContent = dailyLimit + 'm';
-      console.log('📊 Updated display with new daily limit:', dailyLimit + 'm');
+      // Refresh all display elements with new settings
+      refreshDisplayElements();
       
       // Notify content scripts of settings change
       chrome.tabs.query({}, (tabs) => {
@@ -265,7 +306,10 @@ function saveSettings() {
           }
         });
       });
-    });
+    } else {
+      console.error('❌ Failed to save settings');
+      showMessage('Failed to save settings', 'error');
+    }
   });
 }
 
@@ -360,6 +404,35 @@ function isSocialMediaSite(url) {
         const enabledSites = monitoredWebsites.filter(site => site.enabled).map(site => site.domain);
         return enabledSites.some(site => url.includes(site));
     });
+}
+
+// Get current websites from the UI
+function getCurrentWebsites() {
+  const websiteList = document.getElementById('website-list');
+  if (!websiteList) return getDefaultWebsites();
+  
+  const websites = [];
+  const checkboxes = websiteList.querySelectorAll('.website-checkbox');
+  
+  checkboxes.forEach((checkbox, index) => {
+    const label = checkbox.nextElementSibling;
+    if (label && label.textContent) {
+      // Extract domain from the website name (this is a simplified approach)
+      const name = label.textContent;
+      const domain = name.toLowerCase().replace(/\s+/g, '').replace(/[()]/g, '');
+      
+      websites.push({
+        domain: domain,
+        name: name,
+        enabled: checkbox.checked,
+        isDefault: name.includes('Facebook') || name.includes('Twitter') || name.includes('Instagram') || 
+                  name.includes('TikTok') || name.includes('Reddit') || name.includes('YouTube') || 
+                  name.includes('LinkedIn') || name.includes('Snapchat')
+      });
+    }
+  });
+  
+  return websites.length > 0 ? websites : getDefaultWebsites();
 }
 
 // Get default websites

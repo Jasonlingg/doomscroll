@@ -50,14 +50,15 @@ async function checkBackendHealth() {
   return false;
 }
 
-// Helper function to generate user ID (simple hash of browser fingerprint)
+// Helper function to generate user ID (more consistent hash of browser fingerprint)
 function generateUserId() {
   const userAgent = navigator.userAgent;
   const language = navigator.language;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const fingerprint = `${userAgent}|${language}|${timezone}`;
+  const platform = navigator.platform;
+  const fingerprint = `${userAgent}|${language}|${timezone}|${platform}`;
   
-  // Simple hash function
+  // More consistent hash function
   let hash = 0;
   for (let i = 0; i < fingerprint.length; i++) {
     const char = fingerprint.charCodeAt(i);
@@ -65,6 +66,71 @@ function generateUserId() {
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString();
+}
+
+// Helper function to get user ID from storage
+async function getUserId() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['userId'], (result) => {
+      const userId = result.userId || generateUserId();
+      showBackgroundLog(`👤 Using user ID: ${userId}`);
+      resolve(userId);
+    });
+  });
+}
+
+// Backend settings management
+async function saveSettingsToBackend(settings) {
+  try {
+    const userId = await getUserId();
+    const response = await fetch(`${BACKEND_URL}/api/v1/users/${userId}/settings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        daily_limit: settings.dailyLimit || 30,
+        break_reminder: settings.breakReminder || 15,
+        focus_mode_enabled: settings.focusMode || false,
+        focus_sensitivity: settings.focusSensitivity || 'medium',
+        show_overlays: settings.showOverlays !== false,
+        enabled: settings.enabled !== false,
+        monitored_websites: settings.monitoredWebsites || []
+      })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      showBackgroundLog('✅ Settings saved to backend successfully');
+      return true;
+    } else {
+      showBackgroundLog('❌ Failed to save settings to backend:', result.error);
+      return false;
+    }
+  } catch (error) {
+    showBackgroundLog('❌ Error saving settings to backend:', error);
+    return false;
+  }
+}
+
+async function loadSettingsFromBackend() {
+  try {
+    const userId = await getUserId();
+    const response = await fetch(`${BACKEND_URL}/api/v1/users/${userId}/settings`);
+    const result = await response.json();
+    
+    if (result.success) {
+      showBackgroundLog('✅ Settings loaded from backend:', result.settings);
+      return result.settings;
+    } else {
+      showBackgroundLog('❌ Failed to load settings from backend:', result.error);
+      return null;
+    }
+  } catch (error) {
+    showBackgroundLog('❌ Error loading settings from backend:', error);
+    return null;
+  }
 }
 
 // Helper function to show visual logs
@@ -151,9 +217,83 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === 'updateSettings') {
     showBackgroundLog(`⚙️ Updating settings: ${JSON.stringify(request.settings)}`);
-    chrome.storage.sync.set(request.settings, () => {
-      showBackgroundLog('✅ Settings updated successfully');
-      sendResponse({ success: true });
+    
+    // Save to backend first
+    saveSettingsToBackend(request.settings).then(backendSuccess => {
+      // Also save locally as backup, including sync timestamp
+      const settingsWithSync = {
+        ...request.settings,
+        lastBackendSync: Date.now()
+      };
+      
+      chrome.storage.sync.set(settingsWithSync, () => {
+        showBackgroundLog('✅ Settings updated successfully');
+        sendResponse({ success: true, backendSaved: backendSuccess });
+      });
+    });
+    return true;
+  }
+  
+  if (request.action === 'loadSettings') {
+    showBackgroundLog('📂 Loading settings...');
+    
+    // First try to get from local storage
+    chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites', 'lastBackendSync'], (result) => {
+      const now = Date.now();
+      const lastSync = result.lastBackendSync || 0;
+      const syncInterval = 5 * 60 * 1000; // 5 minutes
+      
+      // Always try backend first if we have no local settings or if sync is old
+      if (!result.dailyLimit || now - lastSync > syncInterval) {
+        showBackgroundLog('🔄 Syncing with backend...');
+        loadSettingsFromBackend().then(backendSettings => {
+          if (backendSettings) {
+            // Convert backend format to extension format
+            const extensionSettings = {
+              dailyLimit: backendSettings.daily_limit,
+              breakReminder: backendSettings.break_reminder,
+              focusMode: backendSettings.focus_mode_enabled,
+              focusSensitivity: backendSettings.focus_sensitivity,
+              showOverlays: backendSettings.show_overlays,
+              enabled: backendSettings.enabled,
+              monitoredWebsites: backendSettings.monitored_websites,
+              lastBackendSync: now
+            };
+            
+            // Save to local storage
+            chrome.storage.sync.set(extensionSettings, () => {
+              showBackgroundLog('✅ Settings synced from backend to local storage');
+              sendResponse({ success: true, settings: extensionSettings, fromBackend: true });
+            });
+          } else {
+            // Backend failed, use local settings or defaults
+            showBackgroundLog('⚠️ Backend failed, using local settings or defaults');
+            const fallbackSettings = {
+              dailyLimit: result.dailyLimit || 30,
+              breakReminder: result.breakReminder || 15,
+              focusMode: result.focusMode || false,
+              focusSensitivity: result.focusSensitivity || 'medium',
+              showOverlays: result.showOverlays !== false,
+              enabled: result.enabled !== false,
+              monitoredWebsites: result.monitoredWebsites || []
+            };
+            sendResponse({ success: true, settings: fallbackSettings, fromBackend: false });
+          }
+        });
+      } else {
+        // Use local settings (recently synced)
+        showBackgroundLog('✅ Using recently synced local settings');
+        const localSettings = {
+          dailyLimit: result.dailyLimit || 30,
+          breakReminder: result.breakReminder || 15,
+          focusMode: result.focusMode || false,
+          focusSensitivity: result.focusSensitivity || 'medium',
+          showOverlays: result.showOverlays !== false,
+          enabled: result.enabled !== false,
+          monitoredWebsites: result.monitoredWebsites || []
+        };
+        sendResponse({ success: true, settings: localSettings, fromBackend: false });
+      }
     });
     return true;
   }
