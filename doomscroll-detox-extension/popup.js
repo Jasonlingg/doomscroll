@@ -81,6 +81,12 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Block current site button event listener added');
     }
     
+    const forceResetBtn = document.getElementById('force-reset');
+    if (forceResetBtn) {
+        forceResetBtn.addEventListener('click', forceDailyReset);
+        console.log('✅ Force reset button event listener added');
+    }
+    
     // Add collapsible section functionality
     const settingsToggle = document.getElementById('settings-toggle');
     const settingsContent = document.getElementById('settings-content');
@@ -722,6 +728,35 @@ function blockCurrentSite() {
                     showMessage('Site not found in monitored list', 'info');
                 }
             });
+        }
+    });
+}
+
+// Force daily reset (manual trigger)
+function forceDailyReset() {
+    console.log('🔄 Force daily reset requested...');
+    
+    chrome.runtime.sendMessage({ action: 'forceDailyReset' }, (response) => {
+        if (response && response.success) {
+            console.log('✅ Force daily reset completed');
+            showMessage('Daily usage reset successfully!', 'success');
+            
+            // Update the display to show 0 usage
+            updateUsageDisplay(0);
+            
+            // Notify content scripts
+            chrome.tabs.query({}, (tabs) => {
+                tabs.forEach(tab => {
+                    if (tab.url && isSocialMediaSite(tab.url)) {
+                        chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
+                            // Ignore errors if content script not ready
+                        });
+                    }
+                });
+            });
+        } else {
+            console.error('❌ Force daily reset failed');
+            showMessage('Failed to reset daily usage', 'error');
         }
     });
 }

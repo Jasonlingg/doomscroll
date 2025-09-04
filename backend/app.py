@@ -300,6 +300,19 @@ async def get_analytics_overview(days: int = 7):
     
     overall_stats = cursor.fetchone()
     
+    # User settings summary
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_users,
+            AVG(daily_limit) as avg_daily_limit,
+            AVG(break_reminder) as avg_break_reminder,
+            COUNT(CASE WHEN focus_mode_enabled = 1 THEN 1 END) as focus_mode_users,
+            COUNT(CASE WHEN analytics_enabled = 1 THEN 1 END) as analytics_users
+        FROM users
+    """)
+    
+    user_settings = cursor.fetchone()
+    
     # Events by type
     cursor.execute("""
         SELECT event_type, COUNT(*) as count
@@ -346,7 +359,15 @@ async def get_analytics_overview(days: int = 7):
             "active_users": overall_stats[0],
             "total_events": overall_stats[1],
             "avg_duration_minutes": round(overall_stats[2] or 0, 1),
-            "total_duration_minutes": overall_stats[3] or 0
+            "total_duration_minutes": overall_stats[3] or 0,
+            "total_duration_hours": round((overall_stats[3] or 0) / 60, 1)
+        },
+        "user_settings_summary": {
+            "total_users": user_settings[0],
+            "avg_daily_limit_minutes": round(user_settings[1] or 0, 1),
+            "avg_break_reminder_minutes": round(user_settings[2] or 0, 1),
+            "focus_mode_enabled_users": user_settings[3],
+            "analytics_enabled_users": user_settings[4]
         },
         "events_by_type": events_by_type,
         "top_domains": top_domains,
@@ -355,43 +376,86 @@ async def get_analytics_overview(days: int = 7):
 
 @app.get("/api/v1/analytics/users")
 async def get_user_analytics(days: int = 7, limit: int = 10):
-    """Get analytics for top users"""
+    """Get analytics for top users with full user information"""
     conn = get_db()
     cursor = conn.cursor()
     
     cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
     
-    # Top users by activity
+    # Get top users with full user information
     cursor.execute("""
         SELECT 
-            user_id,
-            COUNT(*) as total_events,
-            COUNT(DISTINCT domain) as unique_domains,
-            AVG(duration) as avg_duration,
-            MAX(duration) as max_duration,
-            SUM(duration) as total_duration_minutes
-        FROM usage_events 
-        WHERE timestamp >= ?
-        GROUP BY user_id
+            u.id as user_id,
+            u.created_at,
+            u.last_active,
+            u.daily_limit,
+            u.break_reminder,
+            u.focus_mode_enabled,
+            u.analytics_enabled,
+            COUNT(e.id) as total_events,
+            COUNT(DISTINCT e.domain) as unique_domains,
+            AVG(e.duration) as avg_duration,
+            MAX(e.duration) as max_duration,
+            SUM(e.duration) as total_duration_minutes,
+            COUNT(CASE WHEN e.event_type = 'focus_alert' THEN 1 END) as focus_alerts,
+            COUNT(CASE WHEN e.event_type = 'break_reminder' THEN 1 END) as break_reminders,
+            COUNT(CASE WHEN e.event_type = 'daily_limit_reached' THEN 1 END) as limit_reached,
+            COUNT(CASE WHEN e.event_type = 'page_view' THEN 1 END) as page_views
+        FROM users u
+        LEFT JOIN usage_events e ON u.id = e.user_id AND e.timestamp >= ?
+        GROUP BY u.id, u.created_at, u.last_active, u.daily_limit, u.break_reminder, 
+                 u.focus_mode_enabled, u.analytics_enabled
         ORDER BY total_events DESC
         LIMIT ?
     """, (cutoff_date, limit))
     
     top_users = []
     for row in cursor.fetchall():
+        # Calculate days since creation and last activity
+        created_at = datetime.fromisoformat(row[1].replace('Z', '+00:00')) if row[1] else None
+        last_active = datetime.fromisoformat(row[2].replace('Z', '+00:00')) if row[2] else None
+        days_since_creation = (datetime.now() - created_at).days if created_at else 0
+        days_since_active = (datetime.now() - last_active).days if last_active else 0
+        
         top_users.append({
             "user_id": row[0][:8] + "...",  # Truncate for privacy
-            "total_events": row[1],
-            "unique_domains": row[2],
-            "avg_duration_minutes": round(row[3] or 0, 1),
-            "max_duration_minutes": row[4] or 0,
-            "total_duration_minutes": row[5] or 0
+            "user_info": {
+                "created_at": row[1],
+                "last_active": row[2],
+                "days_since_creation": days_since_creation,
+                "days_since_active": days_since_active,
+                "is_active": days_since_active <= 1  # Active if used in last 24 hours
+            },
+            "settings": {
+                "daily_limit_minutes": row[3],
+                "break_reminder_minutes": row[4],
+                "focus_mode_enabled": bool(row[5]),
+                "analytics_enabled": bool(row[6])
+            },
+            "usage_stats": {
+                "total_events": row[7],
+                "unique_domains": row[8],
+                "avg_duration_minutes": round(row[9] or 0, 1),
+                "max_duration_minutes": row[10] or 0,
+                "total_duration_minutes": row[11] or 0,
+                "total_duration_hours": round((row[11] or 0) / 60, 1),
+                "focus_alerts": row[12],
+                "break_reminders": row[13],
+                "limit_reached_count": row[14],
+                "page_views": row[15]
+            },
+            "compliance": {
+                "daily_limit_usage_percent": round(((row[11] or 0) / 60) / row[3] * 100, 1) if row[3] > 0 else 0,
+                "break_reminder_frequency": round(row[13] / max(row[7], 1), 2) if row[7] > 0 else 0,
+                "focus_alert_frequency": round(row[12] / max(row[7], 1), 2) if row[7] > 0 else 0
+            }
         })
     
     conn.close()
     
     return {
         "period_days": days,
+        "total_users": len(top_users),
         "top_users": top_users
     }
 

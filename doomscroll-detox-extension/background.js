@@ -153,53 +153,60 @@ function showBackgroundLog(message, type = 'info') {
   });
 }
 
-// Listen for extension installation
-chrome.runtime.onInstalled.addListener(async () => {
-  showBackgroundLog('🚀 Doomscroll Detox extension installed successfully!');
-  showBackgroundLog('📅 Initializing default settings...');
-  
-  // Check backend connectivity
-  const backendHealthy = await checkBackendHealth();
-  if (backendHealthy) {
-    showBackgroundLog('✅ Backend API is running and healthy');
-  } else {
-    showBackgroundLog('⚠️ Backend API is not available - events will be logged locally only');
-  }
-  
-  // Initialize default settings
-  const defaultWebsites = [
-    { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
-    { domain: 'twitter.com', name: 'Twitter/X', enabled: true, isDefault: true },
-    { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
-    { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
-    { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
-    { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
-    { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
-    { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
-    { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
-  ];
-  
-  chrome.storage.sync.set({
-    enabled: true,
-    dailyLimit: 30, // minutes
-    breakReminder: 15, // minutes
-    focusMode: false, // focus mode disabled by default
-    focusSensitivity: 'medium', // medium sensitivity by default
-    showOverlays: true, // show overlays by default
-    monitoredWebsites: defaultWebsites,
-    lastReset: Date.now(),
-    userId: generateUserId(), // Generate unique user ID
-    // Privacy defaults - OFF by default for sensitive features
-    featureFlags: {
-      screenCapture: false, // No screen capture
-      audioCapture: false, // No audio capture
-      keystrokeTracking: false, // No keystroke tracking
-      contentAnalysis: false, // No content analysis
-      analytics: true // Enable analytics for backend
+// Listen for extension installation (not reload)
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // Only run on actual installation, not reload
+  if (details.reason === 'install') {
+    showBackgroundLog('🚀 Doomscroll Detox extension installed successfully!');
+    showBackgroundLog('📅 Initializing default settings...');
+    
+    // Check backend connectivity
+    const backendHealthy = await checkBackendHealth();
+    if (backendHealthy) {
+      showBackgroundLog('✅ Backend API is running and healthy');
+    } else {
+      showBackgroundLog('⚠️ Backend API is not available - events will be logged locally only');
     }
-  }, () => {
-    showBackgroundLog('✅ Default settings initialized with privacy defaults');
-  });
+    
+    // Initialize default settings ONLY on first install
+    const defaultWebsites = [
+      { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
+      { domain: 'twitter.com', name: 'Twitter/X', enabled: true, isDefault: true },
+      { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+      { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+      { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+      { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+      { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+      { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
+      { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+    ];
+    
+    chrome.storage.sync.set({
+      enabled: true,
+      dailyLimit: 30, // minutes
+      breakReminder: 15, // minutes
+      focusMode: false, // focus mode disabled by default
+      focusSensitivity: 'medium', // medium sensitivity by default
+      showOverlays: true, // show overlays by default
+      monitoredWebsites: defaultWebsites,
+      lastReset: Date.now(),
+      userId: generateUserId(), // Generate unique user ID
+      // Privacy defaults - OFF by default for sensitive features
+      featureFlags: {
+        screenCapture: false, // No screen capture
+        audioCapture: false, // No audio capture
+        keystrokeTracking: false, // No keystroke tracking
+        contentAnalysis: false, // No content analysis
+        analytics: true // Enable analytics for backend
+      }
+    }, () => {
+      showBackgroundLog('✅ Default settings initialized with privacy defaults');
+    });
+  } else if (details.reason === 'update') {
+    showBackgroundLog('🔄 Extension updated - preserving existing settings');
+  } else {
+    showBackgroundLog('🔄 Extension reloaded - preserving existing settings');
+  }
 });
 
 // Listen for messages from content script or popup
@@ -318,6 +325,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+  
+  if (request.action === 'forceDailyReset') {
+    showBackgroundLog('🔄 Manual daily reset requested...');
+    chrome.storage.sync.set({ 
+      lastReset: Date.now(), 
+      dailyUsage: 0 
+    }, () => {
+      showBackgroundLog('✅ Manual daily reset completed');
+      
+      // Notify all content scripts
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.url && isSocialMediaSite(tab.url)) {
+            chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
+              // Ignore errors if content script not ready
+            });
+          }
+        });
+      });
+      
+      sendResponse({ success: true, message: 'Daily usage reset successfully' });
+    });
+    return true;
+  }
 });
 
 // Check if daily limit should be reset (new day)
@@ -327,24 +358,41 @@ function checkDailyReset() {
     const now = Date.now();
     const lastReset = result.lastReset || 0;
     const dailyUsage = result.dailyUsage || 0;
-    const oneDay = 24 * 60 * 60 * 1000;
     
-    showBackgroundLog(`📅 Last reset: ${new Date(lastReset).toLocaleString()}`);
-    showBackgroundLog(`⏰ Current time: ${new Date(now).toLocaleString()}`);
-    showBackgroundLog(`⏱️ Time since last reset: ${Math.floor((now - lastReset) / (1000 * 60 * 60))} hours`);
+    // Get the date of the last reset (start of day)
+    const lastResetDate = new Date(lastReset);
+    const lastResetDay = new Date(lastResetDate.getFullYear(), lastResetDate.getMonth(), lastResetDate.getDate());
+    
+    // Get the current date (start of day)
+    const currentDate = new Date(now);
+    const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    
+    showBackgroundLog(`📅 Last reset date: ${lastResetDay.toLocaleDateString()}`);
+    showBackgroundLog(`⏰ Current date: ${currentDay.toLocaleDateString()}`);
     showBackgroundLog(`📊 Current daily usage: ${dailyUsage} minutes`);
     
-    if (now - lastReset >= oneDay) {
+    // Check if it's a new day (different date)
+    if (lastResetDay.getTime() !== currentDay.getTime()) {
       showBackgroundLog('🆕 New day detected! Resetting daily usage...');
-      chrome.storage.sync.set({ lastReset: now, dailyUsage: 0 });
-      // Reset daily usage tracking
-      chrome.tabs.query({}, (tabs) => {
-        showBackgroundLog(`🔍 Found ${tabs.length} tabs, checking for social media sites...`);
-        tabs.forEach(tab => {
-          if (tab.url && isSocialMediaSite(tab.url)) {
-            showBackgroundLog(`🔄 Resetting usage for: ${tab.url}`);
-            chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' });
-          }
+      
+      // Reset daily usage
+      chrome.storage.sync.set({ 
+        lastReset: now, 
+        dailyUsage: 0 
+      }, () => {
+        showBackgroundLog('✅ Daily usage reset to 0');
+        
+        // Notify all content scripts to reset
+        chrome.tabs.query({}, (tabs) => {
+          showBackgroundLog(`🔍 Found ${tabs.length} tabs, notifying content scripts...`);
+          tabs.forEach(tab => {
+            if (tab.url && isSocialMediaSite(tab.url)) {
+              showBackgroundLog(`🔄 Resetting usage for: ${tab.url}`);
+              chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
+                // Ignore errors if content script not ready
+              });
+            }
+          });
         });
       });
     } else {
@@ -361,10 +409,46 @@ function isSocialMediaSite(url) {
   return commonSites.some(site => url.includes(site));
 }
 
-// Set up periodic daily reset check (every hour)
-setInterval(checkDailyReset, 60 * 60 * 1000); // Check every hour
+// Set up periodic daily reset check (every 15 minutes for more reliable reset)
+setInterval(checkDailyReset, 15 * 60 * 1000); // Check every 15 minutes
 
 // Also check when extension starts
-checkDailyReset();
-setInterval(checkDailyReset, 60 * 60 * 1000);
 checkDailyReset(); // Initial check
+
+// Set up a more frequent check around midnight
+setInterval(() => {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  
+  // Check more frequently between 11:45 PM and 12:15 AM
+  if ((hour === 23 && minute >= 45) || (hour === 0 && minute <= 15)) {
+    showBackgroundLog('🌙 Midnight check - verifying daily reset...');
+    checkDailyReset();
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes during midnight window
+
+// Extension startup function (runs on every load, but doesn't reset settings)
+async function extensionStartup() {
+  showBackgroundLog('🚀 Extension starting up...');
+  
+  // Check backend connectivity
+  const backendHealthy = await checkBackendHealth();
+  if (backendHealthy) {
+    showBackgroundLog('✅ Backend API is running and healthy');
+  } else {
+    showBackgroundLog('⚠️ Backend API is not available - events will be logged locally only');
+  }
+  
+  // Check if we have existing settings
+  chrome.storage.sync.get(['userId', 'dailyLimit'], (result) => {
+    if (result.userId && result.dailyLimit) {
+      showBackgroundLog('✅ Existing settings found - preserving user data');
+    } else {
+      showBackgroundLog('⚠️ No existing settings found - user may need to configure');
+    }
+  });
+}
+
+// Run startup on extension load
+extensionStartup();
