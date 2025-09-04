@@ -23,6 +23,10 @@ class User(Base):
     daily_limit = Column(Integer, default=30)  # minutes
     break_reminder = Column(Integer, default=15)  # minutes
     focus_mode_enabled = Column(Boolean, default=False)
+    focus_sensitivity = Column(String(20), default="medium")  # low, medium, high
+    show_overlays = Column(Boolean, default=True)
+    enabled = Column(Boolean, default=True)
+    monitored_websites = Column(Text, default="[]")  # JSON string of domain names
     analytics_enabled = Column(Boolean, default=True)
     
     # Indexes
