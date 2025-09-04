@@ -1,9 +1,51 @@
-# Python virtual environments
-.venv/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
 venv/
+.venv/
 ENV/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
 
 # SQLite database
 *.db
 *.sqlite3
-*.sqlite
+
+# Logs
+*.log
+logs/
+*.out
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test/coverage
+.coverage
+*.cover
+htmlcov/
+.pytest_cache/
+
+# Environment variables / secrets
+.env
+*.env
+.env.*
+*.pyc
+*.pyc
+*.db
+backend/doomscroll_detox.db
