@@ -14,18 +14,20 @@
     line-height: 1.6;
     width: 420px;
     min-height: 500px;
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #fef7ff 0%, #f3e8ff 100%);
+    border-radius: 24px;
+    box-shadow: 0 20px 40px rgba(139, 92, 246, 0.1);
     overflow: hidden;
+    border: 1px solid rgba(196, 181, 253, 0.3);
 }
 
 /* Header */
 .popup-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
     color: white;
     padding: 24px 20px;
     text-align: center;
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
 }
 
 .popup-header h1 {
@@ -51,12 +53,13 @@
 }
 
 .stat-card {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
     color: white;
     padding: 20px;
-    border-radius: 12px;
+    border-radius: 16px;
     text-align: center;
     margin-bottom: 16px;
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.2);
 }
 
 .stat-card h3 {
@@ -81,14 +84,14 @@
 .progress-bar {
     width: 100%;
     height: 8px;
-    background: #e0e0e0;
-    border-radius: 4px;
+    background: rgba(196, 181, 253, 0.3);
+    border-radius: 8px;
     overflow: hidden;
 }
 
 .progress-fill {
     height: 100%;
-    background: #4ecdc4;
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
     width: 0%;
     transition: width 0.3s ease, background-color 0.3s ease;
 }
@@ -128,7 +131,8 @@
 
 .setting-item input[type="number"]:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 /* Toggle switch */
@@ -172,7 +176,7 @@
 }
 
 .toggle-label input[type="checkbox"]:checked + .toggle-text + .toggle-slider {
-    background: #00d4aa !important;
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%) !important;
 }
 
 .toggle-label input[type="checkbox"]:checked + .toggle-text + .toggle-slider:before {
@@ -184,7 +188,7 @@
 }
 
 .toggle-label input[type="checkbox"]:checked + .toggle-text + .toggle-slider:hover {
-    background: #00b894 !important;
+    background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%) !important;
 }
 
 /* Website section */
@@ -328,24 +332,28 @@
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
     color: white;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
 }
 
 .btn-secondary {
-    background: #f8f9fa;
-    color: #666;
-    border: 2px solid #e0e0e0;
+    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    color: #6b46c1;
+    border: 2px solid #c4b5fd;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
 }
 
 .btn-secondary:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
+    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+    border-color: #a78bfa;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
 }
 
 /* Footer */
