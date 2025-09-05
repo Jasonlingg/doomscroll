@@ -349,6 +349,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
+  
+  if (request.action === 'openSettings') {
+    showBackgroundLog('⚙️ Opening settings popup...');
+    chrome.action.openPopup();
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Check if daily limit should be reset (new day)

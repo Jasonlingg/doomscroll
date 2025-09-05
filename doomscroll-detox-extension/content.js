@@ -543,15 +543,15 @@ function forceUpdateIndicator() {
       console.log('✅ Updated indicator time to:', Math.floor(dailyUsage));
     }
     
-    // Force update background color immediately
+    // Force update background color immediately with purple gradients
     const wholeMinutes = Math.floor(dailyUsage);
-    let newBackground = '#4facfe'; // Default blue
+    let newBackground = 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)'; // Default purple gradient
     if (wholeMinutes >= currentSettings.dailyLimit) {
-      newBackground = '#ff6b6b'; // Red for limit reached
+      newBackground = 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'; // Red gradient for limit reached
     } else if (wholeMinutes >= currentSettings.dailyLimit * 0.8) {
-      newBackground = '#ffd93d'; // Yellow for warning
+      newBackground = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'; // Yellow gradient for warning
     } else if (wholeMinutes > 0) {
-      newBackground = '#4ecdc4'; // Teal when active
+      newBackground = 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)'; // Purple gradient when active
     }
     indicator.style.background = newBackground;
     
@@ -570,6 +570,7 @@ function addUsageIndicator() {
       <span class="time-spent">...</span>
       <span class="daily-limit">/...</span>
     </div>
+    <button class="settings-btn" title="Open App Settings">⚡</button>
   `;
   
   // Add loading class for styling
@@ -577,6 +578,13 @@ function addUsageIndicator() {
   
   // Reset loading state flag for new indicator
   loadingStateRemoved = false;
+  
+  // Add click handler for settings button
+  const settingsBtn = indicator.querySelector('.settings-btn');
+  settingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    chrome.runtime.sendMessage({ action: 'openSettings' });
+  });
   
   document.body.appendChild(indicator);
 }
@@ -608,15 +616,15 @@ function updateUsageIndicator(timeSpent, dailyLimit) {
     updates.push(() => limitElement.textContent = `/${dailyLimit}m`);
   }
   
-  // Determine new background color
-  let newBackground = '#4facfe'; // Default blue
+  // Determine new background color with purple gradients
+  let newBackground = 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)'; // Default purple gradient
   
   if (wholeMinutes >= dailyLimit) {
-    newBackground = '#ff6b6b'; // Red for limit reached
+    newBackground = 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'; // Red gradient for limit reached
   } else if (wholeMinutes >= dailyLimit * 0.8) {
-    newBackground = '#ffd93d'; // Yellow for warning
+    newBackground = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'; // Yellow gradient for warning
   } else if (wholeMinutes > 0) {
-    newBackground = '#4ecdc4'; // Teal when active
+    newBackground = 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)'; // Purple gradient when active
   }
   
   // Only update background if it changed
@@ -1297,6 +1305,7 @@ function showProductivitySuggestion() {
     suggestion.remove();
   });
 }
+
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
