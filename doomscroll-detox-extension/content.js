@@ -171,11 +171,8 @@ function init() {
         // Add visual indicators
         addUsageIndicator();
         
-        // Add a small delay before showing real data to ensure loading state is visible
-        setTimeout(() => {
-          forceUpdateIndicator();
-          console.log('✅ Loading state removed, showing real data');
-        }, 1000); // 1 second delay
+        // Wait for data to be populated before removing loading state
+        waitForDataAndUpdate();
         
         // Start focus mode if enabled
         if (focusMode) {
@@ -244,11 +241,8 @@ function init() {
           // Add visual indicators
           addUsageIndicator();
           
-          // Add a small delay before showing real data to ensure loading state is visible
-          setTimeout(() => {
-            forceUpdateIndicator();
-            console.log('✅ Loading state removed, showing real data');
-          }, 1000); // 1 second delay
+          // Wait for data to be populated before removing loading state
+          waitForDataAndUpdate();
           
           // Start focus mode if enabled
           if (focusMode) {
@@ -482,6 +476,42 @@ function handleVisibilityChange() {
   }
 }
 
+// Function to wait for data to be populated before removing loading state
+function waitForDataAndUpdate() {
+  console.log('⏳ Waiting for data to be populated...');
+  
+  // Check if we have valid data
+  const hasValidData = () => {
+    return currentSettings && 
+           currentSettings.dailyLimit && 
+           currentSettings.dailyLimit > 0 &&
+           dailyUsage !== undefined &&
+           dailyUsage >= 0;
+  };
+  
+  // If data is already valid, update immediately
+  if (hasValidData()) {
+    console.log('✅ Data already populated, updating immediately');
+    forceUpdateIndicator();
+    return;
+  }
+  
+  // Otherwise, wait for data to be populated
+  const checkData = () => {
+    if (hasValidData()) {
+      console.log('✅ Data populated, updating indicator');
+      forceUpdateIndicator();
+    } else {
+      console.log('⏳ Still waiting for data... (dailyLimit:', currentSettings?.dailyLimit, 'dailyUsage:', dailyUsage, ')');
+      // Check again in 100ms
+      setTimeout(checkData, 100);
+    }
+  };
+  
+  // Start checking
+  checkData();
+}
+
 // Function to remove loading state and show real data
 function removeLoadingState() {
   const indicator = document.getElementById('doomscroll-indicator');
@@ -712,6 +742,29 @@ function handleMessage(request, sender, sendResponse) {
         dailyUsage = storedUsage;
       }
       sendResponse({ usage: Math.floor(dailyUsage) });
+    });
+    return true; // Keep message channel open for async response
+  }
+  
+  if (request.action === 'getSettings') {
+    console.log('⚙️ Settings requested from popup, sending current settings:', currentSettings);
+    
+    // Get monitored websites from storage
+    chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+      const monitoredWebsites = result.monitoredWebsites || [];
+      
+      const settings = {
+        dailyLimit: currentSettings.dailyLimit,
+        breakReminder: currentSettings.breakReminder,
+        enabled: currentSettings.enabled,
+        focusMode: currentSettings.focusMode,
+        focusSensitivity: currentSettings.focusSensitivity,
+        showOverlays: currentSettings.showOverlays,
+        monitoredWebsites: monitoredWebsites
+      };
+      
+      console.log('📤 Sending settings to popup:', settings);
+      sendResponse({ success: true, settings: settings });
     });
     return true; // Keep message channel open for async response
   }

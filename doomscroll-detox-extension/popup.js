@@ -120,45 +120,65 @@ function loadSettings() {
     return;
   }
   
-  // Request settings from background script (which will try backend first)
-  chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
-    if (response && response.success) {
-      console.log('📥 Retrieved settings:', response.settings);
+  // Try to get settings from active content script first
+  chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+    if (tabs[0] && tabs[0].url) {
+      console.log('🔍 Getting settings from active content script...');
       
-      const dailyLimit = response.settings.dailyLimit || 30;
-      const breakReminder = response.settings.breakReminder || 15;
-      const enabled = response.settings.enabled !== false; // Default to true
-      const focusMode = response.settings.focusMode || false;
-      const focusSensitivity = response.settings.focusSensitivity || 'medium';
-      const showOverlays = response.settings.showOverlays !== false; // Default to true
-      const monitoredWebsites = response.settings.monitoredWebsites || getDefaultWebsites();
-      
-      console.log('⚙️ Setting form values:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays, monitoredWebsites });
-      
-      document.getElementById('daily-limit-input').value = dailyLimit;
-      document.getElementById('break-reminder-input').value = breakReminder;
-      document.getElementById('enabled-toggle').checked = enabled;
-      document.getElementById('focus-mode-toggle').checked = focusMode;
-      document.getElementById('focus-sensitivity').value = focusSensitivity;
-      document.getElementById('overlay-toggle').checked = showOverlays;
-      
-      // Update display
-      document.getElementById('daily-limit').textContent = dailyLimit + 'm';
-      
-      // Load website list
-      loadWebsiteList(monitoredWebsites);
-      
-      console.log('✅ Settings loaded and form updated');
-      console.log('🌐 Settings source:', response.fromBackend ? 'Backend' : 'Local storage');
-      
-      // Only refresh content scripts if settings came from backend
-      if (response.fromBackend !== false) {
-        refreshAllContentScripts();
-      }
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'getSettings' }, (response) => {
+        if (response && response.success && response.settings) {
+          console.log('📥 Got settings from content script:', response.settings);
+          
+          const settings = {
+            dailyLimit: response.settings.dailyLimit || 30,
+            breakReminder: response.settings.breakReminder || 15,
+            enabled: response.settings.enabled !== false,
+            focusMode: response.settings.focusMode || false,
+            focusSensitivity: response.settings.focusSensitivity || 'medium',
+            showOverlays: response.settings.showOverlays !== false,
+            monitoredWebsites: response.settings.monitoredWebsites || getDefaultWebsites()
+          };
+          
+          // Update form elements with content script settings
+          updateFormElements(settings);
+          updateDisplay(settings);
+          
+          console.log('✅ Settings loaded from content script');
+          console.log('🌐 Settings source: Content script');
+        } else {
+          console.log('⚠️ No response from content script, falling back to local storage');
+          loadSettingsFromLocalStorage();
+        }
+      });
     } else {
-      console.error('❌ Failed to load settings');
-      showMessage('Failed to load settings', 'error');
+      console.log('⚠️ No active tab, falling back to local storage');
+      loadSettingsFromLocalStorage();
     }
+  });
+}
+
+// Fallback: Load settings from local storage
+function loadSettingsFromLocalStorage() {
+  console.log('📦 Loading settings from local storage...');
+  
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites'], (localResult) => {
+    console.log('📦 Local storage fallback:', localResult);
+    
+    const localSettings = {
+      dailyLimit: localResult.dailyLimit || 30,
+      breakReminder: localResult.breakReminder || 15,
+      enabled: localResult.enabled !== false,
+      focusMode: localResult.focusMode || false,
+      focusSensitivity: localResult.focusSensitivity || 'medium',
+      showOverlays: localResult.showOverlays !== false,
+      monitoredWebsites: localResult.monitoredWebsites || getDefaultWebsites()
+    };
+    
+    updateFormElements(localSettings);
+    updateDisplay(localSettings);
+    
+    console.log('✅ Settings loaded from local storage');
+    console.log('🌐 Settings source: Local storage');
   });
 }
 
@@ -216,6 +236,49 @@ function refreshDisplayElements() {
   });
   
   console.log('✅ All display elements refreshed');
+}
+
+// Update form elements with settings
+function updateFormElements(settings) {
+  console.log('🔄 Updating form elements with settings:', settings);
+  
+  const dailyLimitInput = document.getElementById('daily-limit-input');
+  const breakReminderInput = document.getElementById('break-reminder-input');
+  const enabledToggle = document.getElementById('enabled-toggle');
+  const focusModeToggle = document.getElementById('focus-mode-toggle');
+  const focusSensitivity = document.getElementById('focus-sensitivity');
+  const overlayToggle = document.getElementById('overlay-toggle');
+  
+  if (dailyLimitInput) dailyLimitInput.value = settings.dailyLimit;
+  if (breakReminderInput) breakReminderInput.value = settings.breakReminder;
+  if (enabledToggle) enabledToggle.checked = settings.enabled;
+  if (focusModeToggle) focusModeToggle.checked = settings.focusMode;
+  if (focusSensitivity) focusSensitivity.value = settings.focusSensitivity;
+  if (overlayToggle) overlayToggle.checked = settings.showOverlays;
+  
+  // Load website list
+  loadWebsiteList(settings.monitoredWebsites);
+  
+  console.log('✅ Form elements updated');
+}
+
+// Update display with settings
+function updateDisplay(settings) {
+  console.log('🔄 Updating display with settings:', settings);
+  
+  // Update daily limit display
+  const dailyLimitDisplay = document.getElementById('daily-limit');
+  if (dailyLimitDisplay) {
+    dailyLimitDisplay.textContent = settings.dailyLimit + 'm';
+  }
+  
+  // Update usage display
+  chrome.storage.sync.get(['dailyUsage'], (result) => {
+    const currentUsage = result.dailyUsage || 0;
+    updateUsageDisplay(currentUsage);
+  });
+  
+  console.log('✅ Display updated');
 }
 
 // Update usage display
