@@ -10,12 +10,12 @@
   ],
   "host_permissions": [
     "*://*.facebook.com/*",
-    "*://*.twitter.com/*",
     "*://*.x.com/*",
     "*://*.youtube.com/*",
     "*://*.instagram.com/*",
     "*://*.tiktok.com/*",
     "*://*.reddit.com/*",
+    "*://*.linkedin.com/*",
     "http://127.0.0.1:8000/*",
     "http://localhost:8000/*"
   ],

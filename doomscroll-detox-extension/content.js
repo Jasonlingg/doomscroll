@@ -135,10 +135,11 @@ function init() {
       const focusMode = response.settings.focusMode || false;
       const focusSensitivity = response.settings.focusSensitivity || 'medium';
       const showOverlays = response.settings.showOverlays !== false; // Default to true
+      const enabled = response.settings.enabled !== false; // Default to true
       const monitoredWebsites = response.settings.monitoredWebsites || [];
       
       // Update current settings
-      currentSettings = { dailyLimit, breakReminder, enabled: true, focusMode, focusSensitivity, showOverlays };
+      currentSettings = { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays };
       
       // Update focus mode cooldown based on sensitivity
       updateFocusModeSensitivity(focusSensitivity);
@@ -161,6 +162,13 @@ function init() {
       });
       
       console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
+      console.log('🔧 Extension enabled?', enabled);
+      
+      // Check if extension is enabled first
+      if (!enabled) {
+        console.log('❌ Extension is disabled, content script will not run');
+        return;
+      }
       
       if (isMonitored) {
         console.log('✅ Site is monitored, starting tracking...');
@@ -190,7 +198,7 @@ function init() {
     } else {
       console.error('❌ Failed to load settings from backend, using local fallback');
       // Fallback to local storage
-      chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'monitoredWebsites'], (result) => {
+      chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites'], (result) => {
         if (chrome.runtime.lastError) {
           console.error('❌ Storage access error during init:', chrome.runtime.lastError);
           // Use default settings and localStorage fallback
@@ -205,10 +213,11 @@ function init() {
         const focusMode = result.focusMode || false;
         const focusSensitivity = result.focusSensitivity || 'medium';
         const showOverlays = result.showOverlays !== false; // Default to true
+        const enabled = result.enabled !== false; // Default to true
         const monitoredWebsites = result.monitoredWebsites || [];
         
         // Update current settings
-        currentSettings = { dailyLimit, breakReminder, enabled: true, focusMode, focusSensitivity, showOverlays };
+        currentSettings = { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays };
         
         // Update focus mode cooldown based on sensitivity
         updateFocusModeSensitivity(focusSensitivity);
@@ -231,6 +240,13 @@ function init() {
         });
         
         console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
+        console.log('🔧 Extension enabled?', enabled);
+        
+        // Check if extension is enabled first
+        if (!enabled) {
+          console.log('❌ Extension is disabled, content script will not run');
+          return;
+        }
         
         if (isMonitored) {
           console.log('✅ Site is monitored, starting tracking...');
