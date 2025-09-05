@@ -12,7 +12,7 @@
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #333;
     line-height: 1.6;
-    width: 350px;
+    width: 420px;
     min-height: 500px;
     background: white;
     border-radius: 16px;
@@ -133,25 +133,30 @@
 
 /* Toggle switch */
 .toggle-label {
-    display: flex;
-    align-items: center;
+    display: block;
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
+    margin-bottom: 12px;
 }
 
 .toggle-label input[type="checkbox"] {
     display: none;
 }
 
+.toggle-text {
+    display: block;
+}
+
 .toggle-slider {
-    position: relative;
+    display: block;
     width: 44px;
     height: 24px;
     background: #ccc;
     border-radius: 12px;
-    margin-right: 12px;
+    position: relative;
     transition: background 0.3s ease;
+    margin-bottom: 8px;
 }
 
 .toggle-slider:before {
@@ -166,12 +171,20 @@
     transition: transform 0.3s ease;
 }
 
-.toggle-label input[type="checkbox"]:checked + .toggle-slider {
-    background: #4ecdc4;
+.toggle-label input[type="checkbox"]:checked + .toggle-text + .toggle-slider {
+    background: #00d4aa !important;
 }
 
-.toggle-label input[type="checkbox"]:checked + .toggle-slider:before {
+.toggle-label input[type="checkbox"]:checked + .toggle-text + .toggle-slider:before {
     transform: translateX(20px);
+}
+
+.toggle-label:hover .toggle-slider {
+    background: #bbb;
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-text + .toggle-slider:hover {
+    background: #00b894 !important;
 }
 
 /* Website section */
@@ -402,9 +415,9 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 400px) {
+@media (max-width: 450px) {
     .popup-container {
-        width: 320px;
+        width: 380px;
     }
     
     .popup-header,
