@@ -1049,6 +1049,20 @@ function showFocusModeAlert() {
   const contentType = detectContentType();
   const alertMessage = getContentTypeMessage(contentType);
   
+  // Create dark overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    z-index: 10002 !important;
+    backdrop-filter: blur(5px) !important;
+  `;
+  
   const alert = document.createElement('div');
   alert.id = 'focus-mode-alert';
   alert.innerHTML = `
@@ -1071,21 +1085,24 @@ function showFocusModeAlert() {
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 10003;
-    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
     color: white;
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    padding: 32px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(139, 92, 246, 0.4);
     text-align: center;
-    max-width: 400px;
+    max-width: 450px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.2);
   `;
   
+  document.body.appendChild(overlay);
   document.body.appendChild(alert);
   
   // Add button functionality
   document.getElementById('yes-productive').addEventListener('click', () => {
     console.log('✅ User confirmed they are being productive');
+    overlay.remove();
     alert.remove();
     // Reset timer for another 30 seconds
     focusModeAlertShown = false;
@@ -1094,6 +1111,7 @@ function showFocusModeAlert() {
   
   document.getElementById('no-productive').addEventListener('click', () => {
     console.log('❌ User admitted they are being unproductive');
+    overlay.remove();
     alert.remove();
     // Show motivational message and suggest alternatives
     showProductivitySuggestion();
@@ -1101,6 +1119,7 @@ function showFocusModeAlert() {
   
   document.getElementById('snooze-alert').addEventListener('click', () => {
     console.log('⏰ User snoozed alert for 5 minutes');
+    overlay.remove();
     alert.remove();
     // Snooze for 5 minutes
     setTimeout(() => {
