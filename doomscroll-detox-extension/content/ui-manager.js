@@ -223,6 +223,91 @@ function showDamageAnimationOnIndicator() {
         75% { transform: scale(1.05); }
         100% { transform: scale(1); }
       }
+      
+      /* Alert animations */
+      @keyframes alertSlideIn {
+        0% { 
+          transform: translate(-50%, -50%) scale(0.8) rotate(-5deg);
+          opacity: 0;
+        }
+        50% {
+          transform: translate(-50%, -50%) scale(1.05) rotate(2deg);
+          opacity: 0.8;
+        }
+        100% { 
+          transform: translate(-50%, -50%) scale(1) rotate(0deg);
+          opacity: 1;
+        }
+      }
+      
+      /* Enhanced animated buttons */
+      .btn-animated {
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1)) !important;
+        border: 1px solid rgba(255, 255, 255, 0.4) !important;
+        color: white !important;
+        padding: 14px 28px !important;
+        border-radius: 16px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        cursor: pointer !important;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+        position: relative !important;
+        overflow: hidden !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+      }
+      
+      .btn-animated::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: -100% !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent) !important;
+        transition: left 0.5s !important;
+      }
+      
+      .btn-animated:hover::before {
+        left: 100% !important;
+      }
+      
+      .btn-animated:hover {
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) !important;
+        border-color: rgba(255, 255, 255, 0.6) !important;
+        transform: translateY(-3px) scale(1.05) !important;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+      }
+      
+      .btn-animated:active {
+        transform: translateY(-1px) scale(1.02) !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+      }
+      
+      .btn-danger {
+        background: linear-gradient(145deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.6)) !important;
+        border-color: rgba(239, 68, 68, 0.9) !important;
+        box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+      }
+      
+      .btn-danger:hover {
+        background: linear-gradient(145deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 0.8)) !important;
+        border-color: rgba(239, 68, 68, 1) !important;
+        box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+      }
+      
+      .btn-success {
+        background: linear-gradient(145deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.6)) !important;
+        border-color: rgba(34, 197, 94, 0.9) !important;
+        box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+      }
+      
+      .btn-success:hover {
+        background: linear-gradient(145deg, rgba(34, 197, 94, 1), rgba(22, 163, 74, 0.8)) !important;
+        border-color: rgba(34, 197, 94, 1) !important;
+        box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -247,13 +332,27 @@ function showBreakReminder() {
     duration: stateManager.getDailyUsage()
   });
   
+  // Create dark overlay with blur
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    z-index: 10001 !important;
+    backdrop-filter: blur(5px) !important;
+  `;
+  
   const reminder = document.createElement('div');
   reminder.id = 'doomscroll-reminder';
   reminder.innerHTML = `
     <div class="reminder-content">
       <h3>🕐 Time for a break!</h3>
       <p>You've been scrolling for a while. Consider taking a short break.</p>
-      <button id="dismiss-reminder">Dismiss</button>
+      <button id="dismiss-reminder" class="btn-animated">Dismiss</button>
     </div>
   `;
   
@@ -262,25 +361,32 @@ function showBreakReminder() {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 10001;
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10002;
+    background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+    color: white;
+    padding: 32px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(78, 205, 196, 0.4);
     text-align: center;
-    max-width: 300px;
+    max-width: 400px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    animation: alertSlideIn 0.5s ease-out;
   `;
   
+  document.body.appendChild(overlay);
   document.body.appendChild(reminder);
   
   // Add dismiss functionality
   document.getElementById('dismiss-reminder').addEventListener('click', () => {
+    overlay.remove();
     reminder.remove();
   });
   
   // Auto-dismiss after 10 seconds
   setTimeout(() => {
     if (reminder.parentNode) {
+      overlay.remove();
       reminder.remove();
     }
   }, 10000);
@@ -299,13 +405,27 @@ function showDailyLimitReached() {
     duration: stateManager.getDailyUsage()
   });
   
+  // Create dark overlay with blur
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    z-index: 10002 !important;
+    backdrop-filter: blur(5px) !important;
+  `;
+  
   const limitMessage = document.createElement('div');
   limitMessage.id = 'doomscroll-limit';
   limitMessage.innerHTML = `
     <div class="limit-content">
       <h3>🚫 Daily Limit Reached</h3>
       <p>You've reached your daily social media limit. Time to step away!</p>
-      <button id="override-limit">Override (not recommended)</button>
+      <button id="override-limit" class="btn-animated btn-danger">Override (not recommended)</button>
     </div>
   `;
   
@@ -314,20 +434,25 @@ function showDailyLimitReached() {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 10002;
-    background: #ff6b6b;
+    z-index: 10003;
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
     color: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    padding: 32px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(220, 38, 38, 0.4);
     text-align: center;
-    max-width: 300px;
+    max-width: 400px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    animation: alertSlideIn 0.5s ease-out;
   `;
   
+  document.body.appendChild(overlay);
   document.body.appendChild(limitMessage);
   
   // Add override functionality
   document.getElementById('override-limit').addEventListener('click', () => {
+    overlay.remove();
     limitMessage.remove();
   });
 }
@@ -443,6 +568,20 @@ function showPrivacyNotice() {
 }
 
 function showProductivitySuggestion() {
+  // Create dark overlay with blur
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    z-index: 10004 !important;
+    backdrop-filter: blur(5px) !important;
+  `;
+  
   const suggestion = document.createElement('div');
   suggestion.id = 'productivity-suggestion';
   suggestion.innerHTML = `
@@ -459,7 +598,7 @@ function showProductivitySuggestion() {
           <li>📝 Journal your thoughts</li>
         </ul>
       </div>
-      <button id="close-suggestion" class="btn-close">Got it!</button>
+      <button id="close-suggestion" class="btn-animated btn-success">Got it!</button>
     </div>
   `;
   
@@ -469,21 +608,25 @@ function showProductivitySuggestion() {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 10004;
+    z-index: 10005;
     background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
     color: white;
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    padding: 32px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(78, 205, 196, 0.4);
     text-align: center;
-    max-width: 450px;
+    max-width: 500px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    animation: alertSlideIn 0.5s ease-out;
   `;
   
+  document.body.appendChild(overlay);
   document.body.appendChild(suggestion);
   
   // Add close functionality
   document.getElementById('close-suggestion').addEventListener('click', () => {
+    overlay.remove();
     suggestion.remove();
   });
 }
