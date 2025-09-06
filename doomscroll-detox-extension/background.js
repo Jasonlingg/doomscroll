@@ -356,6 +356,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+  
+  if (request.action === 'broadcastUsageUpdate') {
+    showBackgroundLog(`📡 Broadcasting usage update: ${request.usage} minutes`);
+    showBackgroundLog(`⏰ Timestamp: ${new Date(request.timestamp).toLocaleTimeString()}`);
+    
+    // Send usage update to all tabs
+    chrome.tabs.query({}, (tabs) => {
+      showBackgroundLog(`🔍 Found ${tabs.length} total tabs`);
+      
+      let monitoredTabs = 0;
+      tabs.forEach(tab => {
+        if (tab.url && isSocialMediaSite(tab.url)) {
+          monitoredTabs++;
+          showBackgroundLog(`📤 Sending update to monitored tab: ${tab.url}`);
+          chrome.tabs.sendMessage(tab.id, { 
+            action: 'usageUpdated', 
+            usage: request.usage,
+            timestamp: request.timestamp
+          }).catch((error) => {
+            showBackgroundLog(`❌ Failed to send to tab ${tab.url}: ${error.message}`);
+          });
+        }
+      });
+      
+      showBackgroundLog(`✅ Broadcast sent to ${monitoredTabs} monitored tabs`);
+    });
+    
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Check if daily limit should be reset (new day)
