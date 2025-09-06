@@ -25,7 +25,15 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/content.js"],
+      "js": [
+        "content/state-manager.js",
+        "content/time-tracker.js",
+        "content/ui-manager.js",
+        "content/focus-mode.js",
+        "content/message-handler.js",
+        "content/utils.js",
+        "content/content.js"
+      ],
       "css": ["css/content-styles.css"]
     }
   ],
