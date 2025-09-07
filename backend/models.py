@@ -3,7 +3,7 @@ Database models for Doomscroll Detox
 Simple SQLAlchemy models for tracking user usage
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, JSON, Index
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, JSON, Index, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -39,11 +39,11 @@ class UsageEvent(Base):
     __tablename__ = "usage_events"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(64), nullable=False, index=True)
+    user_id = Column(String(64), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     
     # Event data
     event_type = Column(String(50), nullable=False)  # page_view, scroll, focus_alert, etc.
-    timestamp = Column(DateTime, nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True, default=func.now())
     domain = Column(String(255), nullable=False, index=True)
     url = Column(Text, nullable=True)
     duration = Column(Integer, nullable=True)  # seconds
@@ -64,7 +64,7 @@ class DailyStats(Base):
     __tablename__ = "daily_stats"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(64), nullable=False, index=True)
+    user_id = Column(String(64), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     date = Column(DateTime, nullable=False)  # Date only
     
     # Statistics
@@ -76,6 +76,7 @@ class DailyStats(Base):
     # Indexes
     __table_args__ = (
         Index('idx_daily_stats_user_date', 'user_id', 'date'),
+        UniqueConstraint('user_id', 'date', name='uq_daily_stats_user_date'),
     )
 
 # Utility functions

@@ -178,20 +178,11 @@ function updateUsageIndicator(timeSpent, dailyLimit, showDamageAnimation = false
   }
 }
 
-// Show damage animation on the indicator
-function showDamageAnimationOnIndicator() {
-  const indicator = document.getElementById('doomscroll-indicator');
-  if (!indicator) return;
-  
-  console.log('💥 Showing damage animation on indicator');
-  
-  // Add damage animation class
-  indicator.classList.add('damage-animation');
-  
-  // Add CSS for damage animation if not already present
-  if (!document.getElementById('damage-animation-styles')) {
+// Inject all CSS styles immediately when the module loads
+function injectAllStyles() {
+  if (!document.getElementById('doomscroll-styles')) {
     const style = document.createElement('style');
-    style.id = 'damage-animation-styles';
+    style.id = 'doomscroll-styles';
     style.textContent = `
       .damage-animation {
         animation: damageShake 0.6s ease-in-out;
@@ -240,77 +231,95 @@ function showDamageAnimationOnIndicator() {
         }
       }
       
-      /* Enhanced animated buttons */
-      .btn-animated {
-        background: linear-gradient(145deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1)) !important;
-        border: 1px solid rgba(255, 255, 255, 0.4) !important;
-        color: white !important;
-        padding: 14px 28px !important;
-        border-radius: 16px !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        cursor: pointer !important;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-        position: relative !important;
-        overflow: hidden !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-      }
-      
-      .btn-animated::before {
-        content: '' !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: -100% !important;
+      /* Button layout and spacing */
+      .focus-alert-buttons {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+        margin-top: 32px !important;
         width: 100% !important;
-        height: 100% !important;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent) !important;
-        transition: left 0.5s !important;
       }
       
-      .btn-animated:hover::before {
-        left: 100% !important;
+      /* Clean white buttons */
+      .btn-animated {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(255, 255, 255, 0.8) !important;
+        color: #333 !important;
+        padding: 14px 20px !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        width: 100% !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
       }
       
       .btn-animated:hover {
-        background: linear-gradient(145deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) !important;
-        border-color: rgba(255, 255, 255, 0.6) !important;
-        transform: translateY(-3px) scale(1.05) !important;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+        background: rgba(255, 255, 255, 1) !important;
+        border-color: rgba(255, 255, 255, 1) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
       }
       
       .btn-animated:active {
-        transform: translateY(-1px) scale(1.02) !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+        transform: translateY(0) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
       }
       
       .btn-danger {
-        background: linear-gradient(145deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.6)) !important;
-        border-color: rgba(239, 68, 68, 0.9) !important;
-        box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-color: rgba(255, 255, 255, 0.8) !important;
+        color: #dc2626 !important;
       }
       
       .btn-danger:hover {
-        background: linear-gradient(145deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 0.8)) !important;
-        border-color: rgba(239, 68, 68, 1) !important;
-        box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+        background: rgba(255, 255, 255, 1) !important;
+        border-color: rgba(255, 255, 255, 1) !important;
+        color: #b91c1c !important;
       }
       
       .btn-success {
-        background: linear-gradient(145deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.6)) !important;
-        border-color: rgba(34, 197, 94, 0.9) !important;
-        box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-color: rgba(255, 255, 255, 0.8) !important;
+        color: #16a34a !important;
       }
       
       .btn-success:hover {
-        background: linear-gradient(145deg, rgba(34, 197, 94, 1), rgba(22, 163, 74, 0.8)) !important;
-        border-color: rgba(34, 197, 94, 1) !important;
-        box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+        background: rgba(255, 255, 255, 1) !important;
+        border-color: rgba(255, 255, 255, 1) !important;
+        color: #15803d !important;
+      }
+      
+      .btn-snooze {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-color: rgba(255, 255, 255, 0.8) !important;
+        color: #7c3aed !important;
+      }
+      
+      .btn-snooze:hover {
+        background: rgba(255, 255, 255, 1) !important;
+        border-color: rgba(255, 255, 255, 1) !important;
+        color: #6d28d9 !important;
       }
     `;
     document.head.appendChild(style);
+    console.log('✅ All Doomscroll styles injected immediately');
   }
+}
+
+// Show damage animation on the indicator
+function showDamageAnimationOnIndicator() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (!indicator) return;
+  
+  console.log('💥 Showing damage animation on indicator');
+  
+  // Add damage animation class
+  indicator.classList.add('damage-animation');
+  
+  // CSS is already injected, no need to check
   
   // Remove animation class after animation completes
   setTimeout(() => {
@@ -631,6 +640,9 @@ function showProductivitySuggestion() {
   });
 }
 
+// Inject styles immediately when module loads
+injectAllStyles();
+
 // Export UI management functions
 window.uiManager = {
   waitForDataAndUpdate: waitForDataAndUpdate,
@@ -642,5 +654,6 @@ window.uiManager = {
   showDailyLimitReached: showDailyLimitReached,
   showToastMessage: showToastMessage,
   showPrivacyNotice: showPrivacyNotice,
-  showProductivitySuggestion: showProductivitySuggestion
+  showProductivitySuggestion: showProductivitySuggestion,
+  injectAllStyles: injectAllStyles
 };

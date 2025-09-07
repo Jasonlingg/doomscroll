@@ -159,9 +159,9 @@ function showFocusModeAlert() {
       <p>${alertMessage}</p>
       <p><strong>Are you being productive?</strong></p>
       <div class="focus-alert-buttons">
-        <button id="yes-productive" class="btn-focus-yes">Yes, I'm being productive</button>
-        <button id="no-productive" class="btn-focus-no">No, I'm being unproductive</button>
-        <button id="snooze-alert" class="btn-focus-snooze">Snooze 5 min</button>
+        <button id="yes-productive" class="btn-animated btn-success">Yes, I'm being productive</button>
+        <button id="no-productive" class="btn-animated btn-danger">No, I'm being unproductive</button>
+        <button id="snooze-alert" class="btn-animated btn-snooze">Snooze 5 min</button>
       </div>
     </div>
   `;
@@ -239,16 +239,33 @@ function detectContentType() {
   return 'general';
 }
 
-// Get appropriate message based on content type
+// Get appropriate message based on content type and sensitivity
 function getContentTypeMessage(contentType) {
+  const stateManager = window.stateManager;
+  const sensitivity = stateManager.getCurrentSettings().focusSensitivity;
+  
+  // Get timer duration based on sensitivity
+  let timerDuration = 30; // Default 30 seconds
+  switch (sensitivity) {
+    case 'low':
+      timerDuration = 60; // 60 seconds
+      break;
+    case 'medium':
+      timerDuration = 30; // 30 seconds
+      break;
+    case 'high':
+      timerDuration = 15; // 15 seconds
+      break;
+  }
+  
   const messages = {
-    'youtube-shorts': 'You\'ve been watching YouTube Shorts for 30 seconds.',
-    'tiktok': 'You\'ve been scrolling TikTok for 30 seconds.',
-    'instagram-reels': 'You\'ve been watching Instagram Reels for 30 seconds.',
-    'twitter-feed': 'You\'ve been scrolling Twitter/X for 30 seconds.',
-    'reddit-feed': 'You\'ve been browsing Reddit for 30 seconds.',
-    'facebook-feed': 'You\'ve been scrolling Facebook for 30 seconds.',
-    'general': 'You\'ve been on this social media site for 30 seconds.'
+    'youtube-shorts': `You've been watching YouTube Shorts for ${timerDuration} seconds.`,
+    'tiktok': `You've been scrolling TikTok for ${timerDuration} seconds.`,
+    'instagram-reels': `You've been watching Instagram Reels for ${timerDuration} seconds.`,
+    'twitter-feed': `You've been scrolling Twitter/X for ${timerDuration} seconds.`,
+    'reddit-feed': `You've been browsing Reddit for ${timerDuration} seconds.`,
+    'facebook-feed': `You've been scrolling Facebook for ${timerDuration} seconds.`,
+    'general': `You've been on this social media site for ${timerDuration} seconds.`
   };
   
   return messages[contentType] || messages.general;
