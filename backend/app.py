@@ -198,7 +198,20 @@ async def get_user_settings(user_id: str):
         
         if result:
             # Parse monitored_websites JSON string back to list
-            monitored_websites = json.loads(result[6]) if result[6] else []
+            if result[6]:
+                monitored_websites = json.loads(result[6])
+            else:
+                # Return default websites if null
+                monitored_websites = [
+                    {"domain": "facebook.com", "name": "Facebook", "enabled": True, "isDefault": True},
+                    {"domain": "x.com", "name": "X (Twitter)", "enabled": True, "isDefault": True},
+                    {"domain": "instagram.com", "name": "Instagram", "enabled": True, "isDefault": True},
+                    {"domain": "tiktok.com", "name": "TikTok", "enabled": True, "isDefault": True},
+                    {"domain": "reddit.com", "name": "Reddit", "enabled": True, "isDefault": True},
+                    {"domain": "youtube.com", "name": "YouTube", "enabled": True, "isDefault": True},
+                    {"domain": "linkedin.com", "name": "LinkedIn", "enabled": False, "isDefault": True},
+                    {"domain": "snapchat.com", "name": "Snapchat", "enabled": False, "isDefault": True}
+                ]
             
             return {
                 "success": True,
@@ -214,6 +227,17 @@ async def get_user_settings(user_id: str):
             }
         else:
             # Return default settings if user doesn't exist
+            default_websites = [
+                {"domain": "facebook.com", "name": "Facebook", "enabled": True, "isDefault": True},
+                {"domain": "twitter.com", "name": "Twitter/X", "enabled": True, "isDefault": True},
+                {"domain": "x.com", "name": "X (Twitter)", "enabled": True, "isDefault": True},
+                {"domain": "instagram.com", "name": "Instagram", "enabled": True, "isDefault": True},
+                {"domain": "tiktok.com", "name": "TikTok", "enabled": True, "isDefault": True},
+                {"domain": "reddit.com", "name": "Reddit", "enabled": True, "isDefault": True},
+                {"domain": "youtube.com", "name": "YouTube", "enabled": True, "isDefault": True},
+                {"domain": "linkedin.com", "name": "LinkedIn", "enabled": False, "isDefault": True},
+                {"domain": "snapchat.com", "name": "Snapchat", "enabled": False, "isDefault": True}
+            ]
             return {
                 "success": True,
                 "settings": {
@@ -223,7 +247,7 @@ async def get_user_settings(user_id: str):
                     "focus_sensitivity": "medium",
                     "show_overlays": True,
                     "enabled": True,
-                    "monitored_websites": []
+                    "monitored_websites": default_websites
                 }
             }
         
