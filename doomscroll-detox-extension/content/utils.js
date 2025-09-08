@@ -1,6 +1,20 @@
 // Utils - Utility functions and helpers
 // Contains helper functions and utilities used across modules
 
+// Get default websites
+function getDefaultWebsites() {
+  return [
+    { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
+    { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+    { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+    { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+    { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+    { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+    { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
+    { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+  ];
+}
+
 // Initialize content script
 function init() {
   console.log('🌐 Content script initializing on:', window.location.hostname);
@@ -25,7 +39,9 @@ function init() {
       const focusSensitivity = response.settings.focusSensitivity || 'medium';
       const showOverlays = response.settings.showOverlays !== false; // Default to true
       const enabled = response.settings.enabled !== false; // Default to true
-      const monitoredWebsites = response.settings.monitoredWebsites || [];
+      const monitoredWebsites = response.settings.monitoredWebsites && response.settings.monitoredWebsites.length > 0 
+        ? response.settings.monitoredWebsites 
+        : getDefaultWebsites();
       
       // Update current settings
       const stateManager = window.stateManager;
@@ -105,7 +121,9 @@ function init() {
         const focusSensitivity = result.focusSensitivity || 'medium';
         const showOverlays = result.showOverlays !== false; // Default to true
         const enabled = result.enabled !== false; // Default to true
-        const monitoredWebsites = result.monitoredWebsites || [];
+        const monitoredWebsites = result.monitoredWebsites && result.monitoredWebsites.length > 0 
+          ? result.monitoredWebsites 
+          : getDefaultWebsites();
         
         // Update current settings
         const stateManager = window.stateManager;
