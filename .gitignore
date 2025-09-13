@@ -46,6 +46,6 @@ htmlcov/
 *.env
 .env.*
 *.pyc
-*.pyc
 *.db
 backend/doomscroll_detox.db
+backend/__pycache__/app.cpython-39.pyc
