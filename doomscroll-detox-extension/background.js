@@ -386,6 +386,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+  
+  if (request.action === 'refreshContentScripts') {
+    showBackgroundLog('🔄 Refreshing content scripts...');
+    registerContentScripts().then(() => {
+      sendResponse({ success: true });
+    }).catch((error) => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // Keep message channel open for async response
+  }
 });
 
 // Check if daily limit should be reset (new day)
@@ -472,8 +482,8 @@ function getDefaultWebsites() {
     { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
     { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
     { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
-    { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
-    { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+    { domain: 'linkedin.com', name: 'LinkedIn', enabled: true, isDefault: true },
+    { domain: 'snapchat.com', name: 'Snapchat', enabled: true, isDefault: true }
   ];
 }
 
@@ -496,9 +506,149 @@ setInterval(() => {
   }
 }, 60 * 1000); // Check every minute during midnight window
 
+// Register content scripts dynamically for allowlisted domains
+async function registerContentScripts() {
+  try {
+    // Get current allowlist from storage
+    const result = await chrome.storage.sync.get(['allowlist']);
+    const allowlist = result.allowlist || getDefaultAllowlist();
+    
+    showBackgroundLog('📝 Registering content scripts for allowlisted domains...');
+    showBackgroundLog('🎯 Allowlist:', allowlist);
+    
+    // Clear existing registered scripts
+    const existingScripts = await chrome.scripting.getRegisteredContentScripts();
+    if (existingScripts.length > 0) {
+      await chrome.scripting.unregisterContentScripts();
+      showBackgroundLog('🗑️ Cleared existing content scripts');
+    }
+    
+    // Register content scripts for each allowlisted domain
+    const contentScripts = [];
+    
+    for (const domain of allowlist) {
+      contentScripts.push({
+        id: `doomscroll-${domain.replace(/[^a-zA-Z0-9]/g, '-')}`,
+        matches: [`*://*.${domain}/*`],
+        js: [
+          'content/state-manager.js',
+          'content/time-tracker.js',
+          'content/ui-manager.js',
+          'content/focus-mode.js',
+          'content/message-handler.js',
+          'content/utils.js',
+          'content/content.js'
+        ],
+        css: ['css/content-styles.css'],
+        runAt: 'document_end'  // Changed from document_start to document_end
+      });
+    }
+    
+    if (contentScripts.length > 0) {
+      await chrome.scripting.registerContentScripts(contentScripts);
+      showBackgroundLog(`✅ Registered ${contentScripts.length} content scripts`);
+      
+      // Log which domains are now monitored
+      contentScripts.forEach(script => {
+        showBackgroundLog(`📋 Registered script for: ${script.matches.join(', ')}`);
+      });
+      
+      // Test: Inject a simple script to verify it works
+      setTimeout(async () => {
+        try {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tabs[0] && tabs[0].url) {
+            const url = new URL(tabs[0].url);
+            const isAllowlisted = allowlist.some(domain => url.hostname.includes(domain));
+            if (isAllowlisted) {
+              showBackgroundLog(`🧪 Testing injection on current tab: ${tabs[0].url}`);
+              await chrome.scripting.executeScript({
+                target: { tabId: tabs[0].id },
+                func: () => {
+                  console.log('🧪 Test injection successful! Content scripts should be working.');
+                  // Create a temporary test indicator
+                  const testDiv = document.createElement('div');
+                  testDiv.innerHTML = '🧪 TEST INDICATOR';
+                  testDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:red;color:white;padding:10px;z-index:9999;';
+                  document.body.appendChild(testDiv);
+                  setTimeout(() => testDiv.remove(), 3000);
+                  
+                  // Check if content scripts are loaded
+                  console.log('🔍 Checking for content script modules...');
+                  console.log('window.stateManager:', typeof window.stateManager);
+                  console.log('window.timeTracker:', typeof window.timeTracker);
+                  console.log('window.uiManager:', typeof window.uiManager);
+                }
+              });
+            }
+          }
+        } catch (error) {
+          showBackgroundLog(`❌ Test injection failed: ${error.message}`);
+        }
+      }, 2000);
+      
+    } else {
+      showBackgroundLog('⚠️ No domains in allowlist, no content scripts registered');
+    }
+    
+  } catch (error) {
+    showBackgroundLog(`❌ Error registering content scripts: ${error.message}`);
+  }
+}
+
+// Get default allowlist (same as manifest host_permissions)
+function getDefaultAllowlist() {
+  return ['youtube.com', 'instagram.com', 'x.com', 'reddit.com', 'linkedin.com', 'tiktok.com', 'snapchat.com', 'facebook.com'];
+}
+
+// Generate and store device_id (UUID)
+async function initializeDeviceId() {
+  try {
+    const result = await chrome.storage.sync.get(['device_id']);
+    
+    if (!result.device_id) {
+      // Generate UUID v4
+      const deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+      
+      await chrome.storage.sync.set({ device_id: deviceId });
+      showBackgroundLog(`🆔 Generated new device ID: ${deviceId}`);
+    } else {
+      showBackgroundLog(`🆔 Using existing device ID: ${result.device_id}`);
+    }
+  } catch (error) {
+    showBackgroundLog(`❌ Error initializing device ID: ${error.message}`);
+  }
+}
+
+// Initialize default allowlist if not exists
+async function initializeAllowlist() {
+  try {
+    const result = await chrome.storage.sync.get(['allowlist']);
+    
+    if (!result.allowlist) {
+      const defaultAllowlist = getDefaultAllowlist();
+      await chrome.storage.sync.set({ allowlist: defaultAllowlist });
+      showBackgroundLog(`📋 Initialized default allowlist: ${defaultAllowlist.join(', ')}`);
+    }
+  } catch (error) {
+    showBackgroundLog(`❌ Error initializing allowlist: ${error.message}`);
+  }
+}
+
 // Extension startup function (runs on every load, but doesn't reset settings)
 async function extensionStartup() {
   showBackgroundLog('🚀 Extension starting up...');
+  
+  // Initialize device ID and allowlist
+  await initializeDeviceId();
+  await initializeAllowlist();
+  
+  // Register content scripts dynamically
+  await registerContentScripts();
   
   // Check backend connectivity
   const backendHealthy = await checkBackendHealth();

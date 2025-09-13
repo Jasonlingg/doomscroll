@@ -87,6 +87,20 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Force reset button event listener added');
     }
     
+    // Add event listener for snippet AI toggle
+    const snippetAiToggle = document.getElementById('snippet-ai-toggle');
+    if (snippetAiToggle) {
+        snippetAiToggle.addEventListener('change', handleSnippetAiToggle);
+        console.log('✅ Snippet AI toggle event listener added');
+    }
+    
+    // Add event listener for delete data button
+    const deleteDataBtn = document.getElementById('delete-data');
+    if (deleteDataBtn) {
+        deleteDataBtn.addEventListener('click', deleteUserData);
+        console.log('✅ Delete data button event listener added');
+    }
+    
     // Add collapsible section functionality
     const settingsToggle = document.getElementById('settings-toggle');
     const settingsContent = document.getElementById('settings-content');
@@ -136,6 +150,7 @@ function loadSettings() {
             focusMode: response.settings.focusMode || false,
             focusSensitivity: response.settings.focusSensitivity || 'medium',
             showOverlays: response.settings.showOverlays !== false,
+            snippet_ai_enabled: response.settings.snippet_ai_enabled || false,
             monitoredWebsites: response.settings.monitoredWebsites || getDefaultWebsites()
           };
           
@@ -161,7 +176,7 @@ function loadSettings() {
 function loadSettingsFromLocalStorage() {
   console.log('📦 Loading settings from local storage...');
   
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites'], (localResult) => {
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'snippet_ai_enabled', 'monitoredWebsites'], (localResult) => {
     console.log('📦 Local storage fallback:', localResult);
     
     const localSettings = {
@@ -171,6 +186,7 @@ function loadSettingsFromLocalStorage() {
       focusMode: localResult.focusMode || false,
       focusSensitivity: localResult.focusSensitivity || 'medium',
       showOverlays: localResult.showOverlays !== false,
+      snippet_ai_enabled: localResult.snippet_ai_enabled || false,
       monitoredWebsites: localResult.monitoredWebsites || getDefaultWebsites()
     };
     
@@ -248,6 +264,7 @@ function updateFormElements(settings) {
   const focusModeToggle = document.getElementById('focus-mode-toggle');
   const focusSensitivity = document.getElementById('focus-sensitivity');
   const overlayToggle = document.getElementById('overlay-toggle');
+  const snippetAiToggle = document.getElementById('snippet-ai-toggle');
   
   if (dailyLimitInput) dailyLimitInput.value = settings.dailyLimit;
   if (breakReminderInput) breakReminderInput.value = settings.breakReminder;
@@ -255,6 +272,7 @@ function updateFormElements(settings) {
   if (focusModeToggle) focusModeToggle.checked = settings.focusMode;
   if (focusSensitivity) focusSensitivity.value = settings.focusSensitivity;
   if (overlayToggle) overlayToggle.checked = settings.showOverlays;
+  if (snippetAiToggle) snippetAiToggle.checked = settings.snippet_ai_enabled;
   
   // Load website list
   loadWebsiteList(settings.monitoredWebsites);
@@ -314,8 +332,9 @@ function saveSettings() {
   const focusMode = document.getElementById('focus-mode-toggle').checked;
   const focusSensitivity = document.getElementById('focus-sensitivity').value;
   const showOverlays = document.getElementById('overlay-toggle').checked;
+  const snippetAiEnabled = document.getElementById('snippet-ai-toggle').checked;
   
-  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays });
+  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays, snippetAiEnabled });
   
   // Validate inputs
   if (dailyLimit < 5 || dailyLimit > 480) {
@@ -343,6 +362,7 @@ function saveSettings() {
     focusMode: focusMode,
     focusSensitivity: focusSensitivity,
     showOverlays: showOverlays,
+    snippet_ai_enabled: snippetAiEnabled,
     monitoredWebsites: monitoredWebsites
   };
   
@@ -821,5 +841,103 @@ function forceDailyReset() {
             console.error('❌ Force daily reset failed');
             showMessage('Failed to reset daily usage', 'error');
         }
+    });
+}
+
+// Handle snippet AI toggle change
+function handleSnippetAiToggle() {
+    const snippetAiToggle = document.getElementById('snippet-ai-toggle');
+    const isEnabled = snippetAiToggle.checked;
+    
+    console.log('🤖 Snippet AI toggle changed:', isEnabled);
+    
+    // Save the setting immediately
+    chrome.storage.sync.set({ snippet_ai_enabled: isEnabled }, () => {
+        if (chrome.runtime.lastError) {
+            console.error('❌ Failed to save snippet AI setting:', chrome.runtime.lastError);
+            showMessage('Failed to save AI setting', 'error');
+        } else {
+            console.log('✅ Snippet AI setting saved:', isEnabled);
+            showMessage(`AI snippet analysis ${isEnabled ? 'enabled' : 'disabled'}`, 'success');
+        }
+    });
+}
+
+// Delete user data function
+function deleteUserData() {
+    const confirmed = confirm(
+        '⚠️ WARNING: This will permanently delete ALL your data!\n\n' +
+        'This includes:\n' +
+        '• All usage statistics\n' +
+        '• Settings and preferences\n' +
+        '• Monitored websites list\n' +
+        '• Device ID\n\n' +
+        'This action cannot be undone!\n\n' +
+        'Are you sure you want to continue?'
+    );
+    
+    if (!confirmed) {
+        console.log('❌ User cancelled data deletion');
+        return;
+    }
+    
+    console.log('🗑️ User confirmed data deletion');
+    showMessage('Deleting all data...', 'info');
+    
+    // Clear all storage
+    chrome.storage.sync.clear(() => {
+        if (chrome.runtime.lastError) {
+            console.error('❌ Failed to clear sync storage:', chrome.runtime.lastError);
+            showMessage('Failed to delete sync data', 'error');
+            return;
+        }
+        
+        chrome.storage.local.clear(() => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ Failed to clear local storage:', chrome.runtime.lastError);
+                showMessage('Failed to delete local data', 'error');
+                return;
+            }
+            
+            console.log('✅ All local data cleared');
+            
+            // Call backend to delete user data
+            chrome.storage.sync.get(['device_id'], (result) => {
+                if (result.device_id) {
+                    // Send delete request to backend
+                    fetch('http://localhost:8000/api/v1/users/delete', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Device-Token': result.device_id
+                        }
+                    }).then(response => {
+                        if (response.ok) {
+                            console.log('✅ Backend data deleted successfully');
+                            showMessage('All data deleted successfully!', 'success');
+                            
+                            // Reload the popup to reflect cleared state
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        } else {
+                            console.log('⚠️ Backend deletion failed, but local data cleared');
+                            showMessage('Local data deleted (backend unavailable)', 'warning');
+                        }
+                    }).catch(error => {
+                        console.log('⚠️ Backend deletion failed:', error);
+                        showMessage('Local data deleted (backend unavailable)', 'warning');
+                    });
+                } else {
+                    console.log('✅ No device ID found, only local data cleared');
+                    showMessage('All data deleted successfully!', 'success');
+                    
+                    // Reload the popup
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            });
+        });
     });
 }

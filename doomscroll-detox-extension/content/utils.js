@@ -1,23 +1,31 @@
 // Utils - Utility functions and helpers
 // Contains helper functions and utilities used across modules
 
+// Import shared website configuration
+// This ensures all files use the same source of truth
+const WEBSITE_CONFIG = {
+  MONITORED_WEBSITES: [
+    { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+    { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+    { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+    { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+    { domain: 'linkedin.com', name: 'LinkedIn', enabled: true, isDefault: true },
+    { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+    { domain: 'snapchat.com', name: 'Snapchat', enabled: true, isDefault: true },
+    { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true }
+  ]
+};
+
 // Get default websites
 function getDefaultWebsites() {
-  return [
-    { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
-    { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
-    { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
-    { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
-    { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
-    { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
-    { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
-    { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
-  ];
+  return WEBSITE_CONFIG.MONITORED_WEBSITES.map(site => ({ ...site }));
 }
 
 // Initialize content script
 function init() {
   console.log('🌐 Content script initializing on:', window.location.hostname);
+  console.log('🔗 Current URL:', window.location.href);
+  console.log('📅 Current time:', new Date().toLocaleTimeString());
   
   // Add error handling for chrome.storage
   if (!chrome.storage) {

@@ -4,27 +4,27 @@
   "version": "1.0.0",
   "description": "A browser extension to help reduce doomscrolling and promote healthier social media habits by tracking time spent on social media sites and providing gentle reminders.",
   "permissions": [
-    "activeTab",
     "storage",
+    "notifications",
+    "scripting",
     "tabs"
   ],
   "host_permissions": [
-    "*://*.facebook.com/*",
-    "*://*.x.com/*",
     "*://*.youtube.com/*",
     "*://*.instagram.com/*",
-    "*://*.tiktok.com/*",
+    "*://*.x.com/*",
     "*://*.reddit.com/*",
     "*://*.linkedin.com/*",
-    "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*"
+    "*://*.tiktok.com/*",
+    "*://*.snapchat.com/*",
+    "*://*.facebook.com/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["*://*.youtube.com/*", "*://*.instagram.com/*", "*://*.x.com/*", "*://*.reddit.com/*", "*://*.linkedin.com/*", "*://*.tiktok.com/*", "*://*.snapchat.com/*", "*://*.facebook.com/*"],
       "js": [
         "content/state-manager.js",
         "content/time-tracker.js",
@@ -34,7 +34,8 @@
         "content/utils.js",
         "content/content.js"
       ],
-      "css": ["css/content-styles.css"]
+      "css": ["css/content-styles.css"],
+      "run_at": "document_end"
     }
   ],
   "action": {

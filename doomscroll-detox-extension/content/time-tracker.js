@@ -280,6 +280,11 @@ function handleUsageUpdateFromOtherTabs(request, sender, sendResponse) {
     } else {
       console.log('⏸️ Ignoring update - incoming usage not higher than current');
     }
+    
+    // Always send response to prevent message channel timeout
+    if (sendResponse) {
+      sendResponse({ success: true });
+    }
   }
 }
 
