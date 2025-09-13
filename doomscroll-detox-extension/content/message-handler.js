@@ -46,19 +46,32 @@ function handleMessage(request, sender, sendResponse) {
   
   if (request.action === 'resetDailyUsage') {
     console.log('🔄 Resetting daily usage...');
+    console.log('📅 New day detected - resetting all tracking data');
+    
+    // Reset all state
     stateManager.setDailyUsage(0);
     stateManager.setStartTime(Date.now());
     stateManager.setReminderShown(false);
+    stateManager.setLastMinuteCompleted(0);
     
-    // Reset usage indicator
+    // Reset usage indicator with animation
     const indicator = document.getElementById('doomscroll-indicator');
     if (indicator) {
       indicator.style.background = 'rgba(0, 0, 0, 0.8)';
-      window.uiManager.updateUsageIndicator(0, 30);
+      window.uiManager.updateUsageIndicator(0, stateManager.getCurrentSettings().dailyLimit);
+      
+      // Add a subtle animation to show reset
+      indicator.style.transform = 'scale(1.1)';
+      setTimeout(() => {
+        indicator.style.transform = 'scale(1)';
+      }, 200);
     }
     
     // Save reset usage to storage
     window.timeTracker.saveDailyUsage();
+    
+    sendResponse({ success: true });
+    return true;
   }
   
   if (request.action === 'settingsUpdated') {

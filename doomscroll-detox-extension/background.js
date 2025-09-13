@@ -420,16 +420,28 @@ function checkDailyReset() {
         showBackgroundLog('✅ Daily usage reset to 0');
         
         // Notify all content scripts to reset
-        chrome.tabs.query({}, (tabs) => {
+        chrome.tabs.query({}, async (tabs) => {
           showBackgroundLog(`🔍 Found ${tabs.length} tabs, notifying content scripts...`);
-          tabs.forEach(tab => {
-            if (tab.url && isSocialMediaSite(tab.url)) {
-              showBackgroundLog(`🔄 Resetting usage for: ${tab.url}`);
-              chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
-                // Ignore errors if content script not ready
-              });
+          let notifiedCount = 0;
+          
+          for (const tab of tabs) {
+            if (tab.url) {
+              try {
+                const isMonitored = await isSocialMediaSite(tab.url);
+                if (isMonitored) {
+                  showBackgroundLog(`🔄 Resetting usage for: ${tab.url}`);
+                  chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
+                    // Ignore errors if content script not ready
+                  });
+                  notifiedCount++;
+                }
+              } catch (error) {
+                showBackgroundLog(`❌ Error checking tab ${tab.url}: ${error.message}`);
+              }
             }
-          });
+          }
+          
+          showBackgroundLog(`✅ Reset notification sent to ${notifiedCount} monitored tabs`);
         });
       });
     } else {
@@ -440,14 +452,33 @@ function checkDailyReset() {
 
 // Check if URL is a monitored site
 function isSocialMediaSite(url) {
-  // This will be updated dynamically based on user settings
-  // For now, check against common social media sites
-  const commonSites = ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'reddit.com'];
-  return commonSites.some(site => url.includes(site));
+  // Get monitored websites from storage
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+      const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
+      const enabledSites = monitoredWebsites.filter(site => site.enabled).map(site => site.domain);
+      const isMonitored = enabledSites.some(site => url.includes(site));
+      resolve(isMonitored);
+    });
+  });
 }
 
-// Set up periodic daily reset check (every 15 minutes for more reliable reset)
-setInterval(checkDailyReset, 15 * 60 * 1000); // Check every 15 minutes
+// Get default websites (same as in other files)
+function getDefaultWebsites() {
+  return [
+    { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
+    { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+    { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+    { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+    { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+    { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+    { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
+    { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+  ];
+}
+
+// Set up periodic daily reset check (every 5 minutes for more reliable reset)
+setInterval(checkDailyReset, 5 * 60 * 1000); // Check every 5 minutes
 
 // Also check when extension starts
 checkDailyReset(); // Initial check
@@ -458,12 +489,12 @@ setInterval(() => {
   const hour = now.getHours();
   const minute = now.getMinutes();
   
-  // Check more frequently between 11:45 PM and 12:15 AM
-  if ((hour === 23 && minute >= 45) || (hour === 0 && minute <= 15)) {
+  // Check every minute between 11:50 PM and 12:10 AM
+  if ((hour === 23 && minute >= 50) || (hour === 0 && minute <= 10)) {
     showBackgroundLog('🌙 Midnight check - verifying daily reset...');
     checkDailyReset();
   }
-}, 5 * 60 * 1000); // Check every 5 minutes during midnight window
+}, 60 * 1000); // Check every minute during midnight window
 
 // Extension startup function (runs on every load, but doesn't reset settings)
 async function extensionStartup() {

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Doomscroll Detox",
   "version": "1.0.0",
-  "description": "A browser extension to help reduce doomscrolling and promote healthier social media habits",
+  "description": "A browser extension to help reduce doomscrolling and promote healthier social media habits by tracking time spent on social media sites and providing gentle reminders.",
   "permissions": [
     "activeTab",
     "storage",
@@ -40,5 +40,6 @@
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Doomscroll Detox"
-  }
+  },
+  "homepage_url": "https://github.com/jasonling/doomscroll"
 }
