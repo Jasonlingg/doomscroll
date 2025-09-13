@@ -48,4 +48,3 @@ htmlcov/
 *.pyc
 *.db
 backend/doomscroll_detox.db
-backend/__pycache__/app.cpython-39.pyc
