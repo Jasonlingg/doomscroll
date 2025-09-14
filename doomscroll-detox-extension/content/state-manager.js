@@ -39,8 +39,21 @@ function refreshSettings() {
   console.log('🔄 Refreshing settings from backend...');
   
   // Request settings from background script (which will get from backend)
-  chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
-    if (response && response.success) {
+  try {
+    if (!chrome.runtime || !chrome.runtime.sendMessage) {
+      console.warn('⚠️ Extension context invalidated - using local storage fallback');
+      loadSettingsFromLocalStorage();
+      return;
+    }
+    
+    chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('⚠️ Extension context invalidated:', chrome.runtime.lastError.message);
+        loadSettingsFromLocalStorage();
+        return;
+      }
+      
+      if (response && response.success) {
       console.log('📥 Retrieved settings from backend:', response.settings);
       
       // Update current settings
@@ -95,6 +108,10 @@ function refreshSettings() {
       });
     }
   });
+  } catch (error) {
+    console.warn('⚠️ Error refreshing settings:', error.message);
+    loadSettingsFromLocalStorage();
+  }
 }
 
 // Listen for storage changes to automatically refresh settings

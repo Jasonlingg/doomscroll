@@ -362,23 +362,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     showBackgroundLog(`⏰ Timestamp: ${new Date(request.timestamp).toLocaleTimeString()}`);
     
     // Send usage update to all tabs
-    chrome.tabs.query({}, (tabs) => {
+    chrome.tabs.query({}, async (tabs) => {
       showBackgroundLog(`🔍 Found ${tabs.length} total tabs`);
       
-      let monitoredTabs = 0;
-      tabs.forEach(tab => {
-        if (tab.url && isSocialMediaSite(tab.url)) {
-          monitoredTabs++;
-          showBackgroundLog(`📤 Sending update to monitored tab: ${tab.url}`);
-          chrome.tabs.sendMessage(tab.id, { 
-            action: 'usageUpdated', 
-            usage: request.usage,
-            timestamp: request.timestamp
-          }).catch((error) => {
-            showBackgroundLog(`❌ Failed to send to tab ${tab.url}: ${error.message}`);
-          });
+      // Process tabs in parallel for better performance
+      const tabPromises = tabs.map(async (tab) => {
+        if (tab.url) {
+          try {
+            const isMonitored = await isSocialMediaSite(tab.url);
+            if (isMonitored) {
+              showBackgroundLog(`📤 Sending update to monitored tab: ${tab.url}`);
+              chrome.tabs.sendMessage(tab.id, { 
+                action: 'usageUpdated', 
+                usage: request.usage,
+                timestamp: request.timestamp
+              }).catch((error) => {
+                showBackgroundLog(`❌ Failed to send to tab ${tab.url}: ${error.message}`);
+              });
+              return 1; // Count this tab
+            }
+          } catch (error) {
+            showBackgroundLog(`❌ Error checking tab ${tab.url}: ${error.message}`);
+          }
         }
+        return 0; // Don't count this tab
       });
+      
+      // Wait for all tab checks to complete
+      const results = await Promise.all(tabPromises);
+      const monitoredTabs = results.reduce((sum, count) => sum + count, 0);
       
       showBackgroundLog(`✅ Broadcast sent to ${monitoredTabs} monitored tabs`);
     });
@@ -396,11 +408,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // Keep message channel open for async response
   }
+  
+  if (request.action === 'checkDailyReset') {
+    showBackgroundLog('🧪 Manual daily reset check requested');
+    checkDailyReset();
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Check if daily limit should be reset (new day)
 function checkDailyReset() {
   showBackgroundLog('🔄 Checking for daily reset...');
+  showBackgroundLog(`🕐 Current time: ${new Date().toLocaleString()}`);
+  
   chrome.storage.sync.get(['lastReset', 'dailyUsage'], (result) => {
     const now = Date.now();
     const lastReset = result.lastReset || 0;
@@ -417,6 +438,7 @@ function checkDailyReset() {
     showBackgroundLog(`📅 Last reset date: ${lastResetDay.toLocaleDateString()}`);
     showBackgroundLog(`⏰ Current date: ${currentDay.toLocaleDateString()}`);
     showBackgroundLog(`📊 Current daily usage: ${dailyUsage} minutes`);
+    showBackgroundLog(`🔍 Date comparison: ${lastResetDay.getTime()} vs ${currentDay.getTime()}`);
     
     // Check if it's a new day (different date)
     if (lastResetDay.getTime() !== currentDay.getTime()) {
@@ -434,7 +456,8 @@ function checkDailyReset() {
           showBackgroundLog(`🔍 Found ${tabs.length} tabs, notifying content scripts...`);
           let notifiedCount = 0;
           
-          for (const tab of tabs) {
+          // Process tabs in parallel for better performance
+          const tabPromises = tabs.map(async (tab) => {
             if (tab.url) {
               try {
                 const isMonitored = await isSocialMediaSite(tab.url);
@@ -443,13 +466,18 @@ function checkDailyReset() {
                   chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
                     // Ignore errors if content script not ready
                   });
-                  notifiedCount++;
+                  return 1; // Count this tab
                 }
               } catch (error) {
                 showBackgroundLog(`❌ Error checking tab ${tab.url}: ${error.message}`);
               }
             }
-          }
+            return 0; // Don't count this tab
+          });
+          
+          // Wait for all tab checks to complete
+          const results = await Promise.all(tabPromises);
+          notifiedCount = results.reduce((sum, count) => sum + count, 0);
           
           showBackgroundLog(`✅ Reset notification sent to ${notifiedCount} monitored tabs`);
         });

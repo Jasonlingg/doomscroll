@@ -238,18 +238,33 @@ function broadcastUsageUpdate(newUsage) {
   console.log('📡 Broadcasting usage update to other tabs:', newUsage);
   console.log('🔍 Current tab URL:', window.location.href);
   
-  // Send message to background script to broadcast to all tabs
-  chrome.runtime.sendMessage({
-    action: 'broadcastUsageUpdate',
-    usage: newUsage,
-    timestamp: Date.now()
-  }, (response) => {
-    if (response && response.success) {
-      console.log('✅ Broadcast message sent successfully');
-    } else {
-      console.error('❌ Failed to send broadcast message');
+  try {
+    // Check if extension context is still valid
+    if (!chrome.runtime || !chrome.runtime.sendMessage) {
+      console.warn('⚠️ Extension context invalidated - skipping broadcast');
+      return;
     }
-  });
+    
+    // Send message to background script to broadcast to all tabs
+    chrome.runtime.sendMessage({
+      action: 'broadcastUsageUpdate',
+      usage: newUsage,
+      timestamp: Date.now()
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('⚠️ Extension context invalidated:', chrome.runtime.lastError.message);
+        return;
+      }
+      
+      if (response && response.success) {
+        console.log('✅ Broadcast message sent successfully');
+      } else {
+        console.error('❌ Failed to send broadcast message');
+      }
+    });
+  } catch (error) {
+    console.warn('⚠️ Error broadcasting usage update:', error.message);
+  }
 }
 
 // Handle usage updates from other tabs

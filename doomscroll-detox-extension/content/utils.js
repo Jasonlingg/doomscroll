@@ -37,11 +37,24 @@ function init() {
   }
   
   // Load settings from backend first
-  chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
-    if (response && response.success) {
-      console.log('📥 Retrieved settings from backend during init:', response.settings);
+  try {
+    if (!chrome.runtime || !chrome.runtime.sendMessage) {
+      console.warn('⚠️ Extension context invalidated - using local storage fallback');
+      loadSettingsFromLocalStorage();
+      return;
+    }
+    
+    chrome.runtime.sendMessage({ action: 'loadSettings' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('⚠️ Extension context invalidated:', chrome.runtime.lastError.message);
+        loadSettingsFromLocalStorage();
+        return;
+      }
       
-      const dailyLimit = response.settings.dailyLimit || 30;
+      if (response && response.success) {
+        console.log('📥 Retrieved settings from backend during init:', response.settings);
+        
+        const dailyLimit = response.settings.dailyLimit || 30;
       const breakReminder = response.settings.breakReminder || 15;
       const focusMode = response.settings.focusMode || false;
       const focusSensitivity = response.settings.focusSensitivity || 'medium';
@@ -194,6 +207,10 @@ function init() {
       });
     }
   });
+  } catch (error) {
+    console.warn('⚠️ Error loading settings:', error.message);
+    loadSettingsFromLocalStorage();
+  }
 }
 
 // Export utility functions
