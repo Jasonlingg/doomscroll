@@ -185,34 +185,53 @@ function injectAllStyles() {
     style.id = 'doomscroll-styles';
     style.textContent = `
       .damage-animation {
-        animation: damageShake 0.6s ease-in-out;
-        box-shadow: 0 0 20px rgba(220, 38, 38, 0.8) !important;
+        animation: damageShake 0.8s ease-in-out;
+        box-shadow: 0 0 30px rgba(220, 38, 38, 1), 0 0 60px rgba(255, 100, 100, 0.6) !important;
+        transform: scale(1.15) !important;
+        filter: brightness(1.3) !important;
       }
       
       @keyframes damageShake {
-        0% { transform: translate(0, 0) rotate(0deg); }
-        10% { transform: translate(-2px, -1px) rotate(-1deg); }
-        20% { transform: translate(2px, 1px) rotate(1deg); }
-        30% { transform: translate(-1px, 2px) rotate(-1deg); }
-        40% { transform: translate(1px, -1px) rotate(1deg); }
-        50% { transform: translate(-1px, 1px) rotate(-1deg); }
-        60% { transform: translate(1px, 1px) rotate(1deg); }
-        70% { transform: translate(-1px, -1px) rotate(-1deg); }
-        80% { transform: translate(1px, -1px) rotate(1deg); }
-        90% { transform: translate(-1px, 1px) rotate(-1deg); }
-        100% { transform: translate(0, 0) rotate(0deg); }
+        0% { transform: scale(1.15) translate(0, 0) rotate(0deg); }
+        5% { transform: scale(1.2) translate(-4px, -2px) rotate(-2deg); }
+        10% { transform: scale(1.18) translate(4px, 2px) rotate(2deg); }
+        15% { transform: scale(1.22) translate(-3px, 4px) rotate(-2deg); }
+        20% { transform: scale(1.16) translate(3px, -2px) rotate(2deg); }
+        25% { transform: scale(1.24) translate(-2px, 3px) rotate(-2deg); }
+        30% { transform: scale(1.19) translate(2px, 2px) rotate(2deg); }
+        35% { transform: scale(1.21) translate(-3px, -2px) rotate(-2deg); }
+        40% { transform: scale(1.17) translate(3px, -3px) rotate(2deg); }
+        45% { transform: scale(1.23) translate(-2px, 2px) rotate(-2deg); }
+        50% { transform: scale(1.2) translate(2px, 1px) rotate(2deg); }
+        55% { transform: scale(1.18) translate(-1px, -1px) rotate(-1deg); }
+        60% { transform: scale(1.16) translate(1px, 1px) rotate(1deg); }
+        65% { transform: scale(1.14) translate(-1px, -1px) rotate(-1deg); }
+        70% { transform: scale(1.12) translate(1px, -1px) rotate(1deg); }
+        75% { transform: scale(1.1) translate(-1px, 1px) rotate(-1deg); }
+        80% { transform: scale(1.08) translate(1px, -1px) rotate(1deg); }
+        85% { transform: scale(1.06) translate(-1px, 1px) rotate(-1deg); }
+        90% { transform: scale(1.04) translate(1px, -1px) rotate(1deg); }
+        95% { transform: scale(1.02) translate(-1px, 1px) rotate(-1deg); }
+        100% { transform: scale(1.15) translate(0, 0) rotate(0deg); }
       }
       
       .damage-animation .doomscroll-badge {
-        animation: damagePulse 0.6s ease-in-out;
+        animation: damagePulse 0.8s ease-in-out;
+        filter: brightness(1.4) !important;
       }
       
       @keyframes damagePulse {
-        0% { transform: scale(1); }
-        25% { transform: scale(1.1); }
-        50% { transform: scale(0.95); }
-        75% { transform: scale(1.05); }
-        100% { transform: scale(1); }
+        0% { transform: scale(1); filter: brightness(1.4); }
+        10% { transform: scale(1.15); filter: brightness(1.6); }
+        20% { transform: scale(1.05); filter: brightness(1.3); }
+        30% { transform: scale(1.2); filter: brightness(1.7); }
+        40% { transform: scale(0.95); filter: brightness(1.2); }
+        50% { transform: scale(1.1); filter: brightness(1.5); }
+        60% { transform: scale(0.98); filter: brightness(1.3); }
+        70% { transform: scale(1.05); filter: brightness(1.4); }
+        80% { transform: scale(0.99); filter: brightness(1.3); }
+        90% { transform: scale(1.02); filter: brightness(1.35); }
+        100% { transform: scale(1); filter: brightness(1.4); }
       }
       
       /* Alert animations */
@@ -325,7 +344,7 @@ function showDamageAnimationOnIndicator() {
   setTimeout(() => {
     indicator.classList.remove('damage-animation');
     console.log('✅ Damage animation completed');
-  }, 600);
+  }, 800);
 }
 
 // Show break reminder

@@ -68,6 +68,22 @@ function generateUserId() {
   return Math.abs(hash).toString();
 }
 
+// Ensure a stable userId exists in chrome.storage.sync
+async function initializeUserId() {
+  try {
+    const result = await chrome.storage.sync.get(['userId']);
+    if (!result.userId) {
+      const newUserId = generateUserId();
+      await chrome.storage.sync.set({ userId: newUserId });
+      showBackgroundLog(`🆔 Initialized persistent userId: ${newUserId}`);
+    } else {
+      showBackgroundLog(`🆔 Persistent userId present: ${result.userId}`);
+    }
+  } catch (error) {
+    showBackgroundLog(`❌ Error initializing userId: ${error.message}`);
+  }
+}
+
 // Helper function to get user ID from storage
 async function getUserId() {
   return new Promise((resolve) => {
@@ -252,7 +268,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         lastBackendSync: Date.now()
       };
       
-      chrome.storage.sync.set(settingsWithSync, () => {
+      // Sanitize before writing to storage (avoid null/0 clobbers)
+      const sanitized = {
+        dailyLimit: Number.isFinite(settingsWithSync.dailyLimit) && settingsWithSync.dailyLimit > 0 ? settingsWithSync.dailyLimit : undefined,
+        breakReminder: Number.isFinite(settingsWithSync.breakReminder) && settingsWithSync.breakReminder > 0 ? settingsWithSync.breakReminder : undefined,
+        focusMode: typeof settingsWithSync.focusMode === 'boolean' ? settingsWithSync.focusMode : undefined,
+        focusSensitivity: settingsWithSync.focusSensitivity || undefined,
+        showOverlays: typeof settingsWithSync.showOverlays === 'boolean' ? settingsWithSync.showOverlays : undefined,
+        enabled: typeof settingsWithSync.enabled === 'boolean' ? settingsWithSync.enabled : undefined,
+        monitoredWebsites: Array.isArray(settingsWithSync.monitoredWebsites) ? settingsWithSync.monitoredWebsites : undefined,
+        lastBackendSync: settingsWithSync.lastBackendSync
+      };
+      chrome.storage.sync.set(sanitized, () => {
         if (chrome.runtime.lastError) {
           showBackgroundLog(`❌ Local storage error: ${chrome.runtime.lastError.message}`);
           sendResponse({ success: false, error: chrome.runtime.lastError.message });
@@ -286,25 +313,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const lastSync = result.lastBackendSync || 0;
       const syncInterval = 5 * 60 * 1000; // 5 minutes
       
-      // Always try backend first if we have no local settings or if sync is old
-      if (!result.dailyLimit || now - lastSync > syncInterval) {
+      // Only try backend if we have no local settings. Avoid overwriting user-updated values with defaults.
+      if (!result.dailyLimit) {
         showBackgroundLog('🔄 Syncing with backend...');
         loadSettingsFromBackend().then(backendSettings => {
           if (backendSettings) {
             // Convert backend format to extension format
             const extensionSettings = {
-              dailyLimit: backendSettings.daily_limit,
-              breakReminder: backendSettings.break_reminder,
-              focusMode: backendSettings.focus_mode_enabled,
-              focusSensitivity: backendSettings.focus_sensitivity,
-              showOverlays: backendSettings.show_overlays,
-              enabled: backendSettings.enabled,
-              monitoredWebsites: backendSettings.monitored_websites,
+              dailyLimit: backendSettings.daily_limit ?? result.dailyLimit ?? 30,
+              breakReminder: backendSettings.break_reminder ?? result.breakReminder ?? 15,
+              focusMode: backendSettings.focus_mode_enabled ?? result.focusMode ?? false,
+              focusSensitivity: backendSettings.focus_sensitivity ?? result.focusSensitivity ?? 'medium',
+              showOverlays: (backendSettings.show_overlays ?? result.showOverlays)
+                // Default true if both are undefined
+                ?? true,
+              enabled: (backendSettings.enabled ?? result.enabled)
+                // Default true if both are undefined
+                ?? true,
+              // If backend returns empty or null, prefer existing local list
+              monitoredWebsites: (Array.isArray(backendSettings.monitored_websites) && backendSettings.monitored_websites.length > 0)
+                ? backendSettings.monitored_websites
+                : (result.monitoredWebsites || []),
               lastBackendSync: now
             };
             
-            // Save to local storage
-            chrome.storage.sync.set(extensionSettings, () => {
+            // Save to local storage (sanitized to avoid null/0)
+            const sanitized = {
+              dailyLimit: Number.isFinite(extensionSettings.dailyLimit) && extensionSettings.dailyLimit > 0 ? extensionSettings.dailyLimit : undefined,
+              breakReminder: Number.isFinite(extensionSettings.breakReminder) && extensionSettings.breakReminder > 0 ? extensionSettings.breakReminder : undefined,
+              focusMode: typeof extensionSettings.focusMode === 'boolean' ? extensionSettings.focusMode : undefined,
+              focusSensitivity: extensionSettings.focusSensitivity || undefined,
+              showOverlays: typeof extensionSettings.showOverlays === 'boolean' ? extensionSettings.showOverlays : undefined,
+              enabled: typeof extensionSettings.enabled === 'boolean' ? extensionSettings.enabled : undefined,
+              monitoredWebsites: Array.isArray(extensionSettings.monitoredWebsites) ? extensionSettings.monitoredWebsites : undefined,
+              lastBackendSync: extensionSettings.lastBackendSync
+            };
+            chrome.storage.sync.set(sanitized, () => {
               showBackgroundLog('✅ Settings synced from backend to local storage');
               sendResponse({ success: true, settings: extensionSettings, fromBackend: true });
             });
@@ -616,41 +660,6 @@ async function registerContentScripts() {
       contentScripts.forEach(script => {
         showBackgroundLog(`📋 Registered script for: ${script.matches.join(', ')}`);
       });
-      
-      // Test: Inject a simple script to verify it works
-      setTimeout(async () => {
-        try {
-          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tabs[0] && tabs[0].url) {
-            const url = new URL(tabs[0].url);
-            const isAllowlisted = allowlist.some(domain => url.hostname.includes(domain));
-            if (isAllowlisted) {
-              showBackgroundLog(`🧪 Testing injection on current tab: ${tabs[0].url}`);
-              await chrome.scripting.executeScript({
-                target: { tabId: tabs[0].id },
-                func: () => {
-                  console.log('🧪 Test injection successful! Content scripts should be working.');
-                  // Create a temporary test indicator
-                  const testDiv = document.createElement('div');
-                  testDiv.innerHTML = '🧪 TEST INDICATOR';
-                  testDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:red;color:white;padding:10px;z-index:9999;';
-                  document.body.appendChild(testDiv);
-                  setTimeout(() => testDiv.remove(), 3000);
-                  
-                  // Check if content scripts are loaded
-                  console.log('🔍 Checking for content script modules...');
-                  console.log('window.stateManager:', typeof window.stateManager);
-                  console.log('window.timeTracker:', typeof window.timeTracker);
-                  console.log('window.uiManager:', typeof window.uiManager);
-                }
-              });
-            }
-          }
-        } catch (error) {
-          showBackgroundLog(`❌ Test injection failed: ${error.message}`);
-        }
-      }, 2000);
-      
     } else {
       showBackgroundLog('⚠️ No domains in allowlist, no content scripts registered');
     }
@@ -708,6 +717,7 @@ async function extensionStartup() {
   showBackgroundLog('🚀 Extension starting up...');
   
   // Initialize device ID and allowlist
+  await initializeUserId();
   await initializeDeviceId();
   await initializeAllowlist();
   

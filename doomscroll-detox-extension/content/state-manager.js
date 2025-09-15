@@ -115,20 +115,49 @@ function refreshSettings() {
 }
 
 // Listen for storage changes to automatically refresh settings
+let storageChangeDebounceTimer = null;
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync') {
-    console.log('🔄 Storage changed, refreshing settings...');
-    console.log('📝 Changes:', changes);
-    
-    // Check if any relevant settings changed
-    const relevantChanges = ['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled'];
-    const hasRelevantChanges = relevantChanges.some(key => changes[key]);
-    
-    if (hasRelevantChanges) {
-      console.log('⚙️ Relevant settings changed, refreshing...');
-      refreshSettings();
-    }
+  if (namespace !== 'sync') return;
+  console.log('🔄 Storage changed');
+  console.log('📝 Changes:', changes);
+
+  // Ignore backend-sync batches (we already applied them during load)
+  if (Object.prototype.hasOwnProperty.call(changes, 'lastBackendSync')) {
+    console.log('🛑 Ignoring backend-sync storage event');
+    return;
   }
+
+  // Ignore non-settings signals
+  const settingsKeys = ['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites'];
+  const changedSettingEntries = Object.entries(changes)
+    .filter(([key]) => settingsKeys.includes(key))
+    // Drop null/undefined updates to avoid clobbering values
+    .filter(([, delta]) => delta && delta.newValue !== null && delta.newValue !== undefined);
+  if (changedSettingEntries.length === 0) return;
+
+  // Debounce rapid bursts
+  if (storageChangeDebounceTimer) clearTimeout(storageChangeDebounceTimer);
+  storageChangeDebounceTimer = setTimeout(() => {
+    // Merge changed keys directly into current settings (local-first), avoid backend fetch
+    const merged = { ...window.stateManager.getCurrentSettings() };
+    changedSettingEntries.forEach(([key, delta]) => {
+      merged[key] = delta.newValue;
+    });
+    window.stateManager.updateSettings(merged);
+
+    // Apply sensitivity update if changed
+    if (changes.focusSensitivity && changes.focusSensitivity.newValue) {
+      updateFocusModeSensitivity(changes.focusSensitivity.newValue);
+    }
+
+    // Force UI to reflect updates
+    const usage = window.stateManager.getDailyUsage();
+    const limit = merged.dailyLimit || 30;
+    window.uiManager.updateUsageIndicator(usage, limit, false);
+    window.uiManager.forceUpdateIndicator && window.uiManager.forceUpdateIndicator();
+
+    console.log('✅ Applied local storage changes without backend refresh');
+  }, 150);
 });
 
 // Update focus mode sensitivity
