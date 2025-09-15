@@ -83,24 +83,41 @@ async function getUserId() {
 async function saveSettingsToBackend(settings) {
   try {
     const userId = await getUserId();
+    showBackgroundLog(`🌐 Saving settings to backend for user: ${userId}`);
+    showBackgroundLog(`📋 Settings data: ${JSON.stringify(settings)}`);
+    
+    const requestBody = {
+      user_id: userId,
+      daily_limit: settings.dailyLimit || 30,
+      break_reminder: settings.breakReminder || 15,
+      focus_mode_enabled: settings.focusMode || false,
+      focus_sensitivity: settings.focusSensitivity || 'medium',
+      show_overlays: settings.showOverlays !== false,
+      enabled: settings.enabled !== false,
+      monitored_websites: settings.monitoredWebsites || []
+    };
+    
+    showBackgroundLog(`📤 Request body: ${JSON.stringify(requestBody)}`);
+    
     const response = await fetch(`${BACKEND_URL}/api/v1/users/${userId}/settings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        user_id: userId,
-        daily_limit: settings.dailyLimit || 30,
-        break_reminder: settings.breakReminder || 15,
-        focus_mode_enabled: settings.focusMode || false,
-        focus_sensitivity: settings.focusSensitivity || 'medium',
-        show_overlays: settings.showOverlays !== false,
-        enabled: settings.enabled !== false,
-        monitored_websites: settings.monitoredWebsites || []
-      })
+      body: JSON.stringify(requestBody)
     });
     
+    showBackgroundLog(`📥 Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      showBackgroundLog(`❌ HTTP error ${response.status}: ${errorText}`);
+      return false;
+    }
+    
     const result = await response.json();
+    showBackgroundLog(`📥 Response data: ${JSON.stringify(result)}`);
+    
     if (result.success) {
       showBackgroundLog('✅ Settings saved to backend successfully');
       return true;
@@ -109,7 +126,7 @@ async function saveSettingsToBackend(settings) {
       return false;
     }
   } catch (error) {
-    showBackgroundLog('❌ Error saving settings to backend:', error);
+    showBackgroundLog('❌ Error saving settings to backend:', error.message);
     return false;
   }
 }
@@ -227,6 +244,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     // Save to backend first
     saveSettingsToBackend(request.settings).then(backendSuccess => {
+      showBackgroundLog(`🌐 Backend save result: ${backendSuccess ? 'Success' : 'Failed'}`);
+      
       // Also save locally as backup, including sync timestamp
       const settingsWithSync = {
         ...request.settings,
@@ -234,8 +253,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       };
       
       chrome.storage.sync.set(settingsWithSync, () => {
-        showBackgroundLog('✅ Settings updated successfully');
-        sendResponse({ success: true, backendSaved: backendSuccess });
+        if (chrome.runtime.lastError) {
+          showBackgroundLog(`❌ Local storage error: ${chrome.runtime.lastError.message}`);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          showBackgroundLog('✅ Settings updated successfully');
+          sendResponse({ success: true, backendSaved: backendSuccess });
+        }
+      });
+    }).catch(error => {
+      showBackgroundLog(`❌ Backend save error: ${error.message}`);
+      // Still save locally even if backend fails
+      const settingsWithSync = {
+        ...request.settings,
+        lastBackendSync: Date.now()
+      };
+      
+      chrome.storage.sync.set(settingsWithSync, () => {
+        showBackgroundLog('⚠️ Settings saved locally only (backend failed)');
+        sendResponse({ success: true, backendSaved: false, error: error.message });
       });
     });
     return true;

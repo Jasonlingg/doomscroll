@@ -353,6 +353,7 @@ function saveSettings() {
   
   // Get current monitored websites
   const monitoredWebsites = getCurrentWebsites();
+  console.log('📋 Monitored websites to save:', monitoredWebsites);
   
   // Save settings via background script (which will save to backend)
   const settings = {
@@ -365,6 +366,8 @@ function saveSettings() {
     snippet_ai_enabled: snippetAiEnabled,
     monitoredWebsites: monitoredWebsites
   };
+  
+  console.log('💾 Sending settings to background script:', settings);
   
   chrome.runtime.sendMessage({ action: 'updateSettings', settings: settings }, (response) => {
     if (response && response.success) {
@@ -503,24 +506,34 @@ function getCurrentWebsites() {
   const websites = [];
   const checkboxes = websiteList.querySelectorAll('.website-checkbox');
   
+  // Map website names to their actual domains
+  const websiteMapping = {
+    'YouTube': 'youtube.com',
+    'Instagram': 'instagram.com', 
+    'X (Twitter)': 'x.com',
+    'Reddit': 'reddit.com',
+    'LinkedIn': 'linkedin.com',
+    'TikTok': 'tiktok.com',
+    'Snapchat': 'snapchat.com',
+    'Facebook': 'facebook.com'
+  };
+  
   checkboxes.forEach((checkbox, index) => {
     const label = checkbox.nextElementSibling;
     if (label && label.textContent) {
-      // Extract domain from the website name (this is a simplified approach)
-      const name = label.textContent;
-      const domain = name.toLowerCase().replace(/\s+/g, '').replace(/[()]/g, '');
+      const name = label.textContent.trim();
+      const domain = websiteMapping[name] || name.toLowerCase().replace(/\s+/g, '').replace(/[()]/g, '');
       
       websites.push({
         domain: domain,
         name: name,
         enabled: checkbox.checked,
-        isDefault: name.includes('Facebook') || name.includes('Twitter') || name.includes('Instagram') || 
-                  name.includes('TikTok') || name.includes('Reddit') || name.includes('YouTube') || 
-                  name.includes('LinkedIn') || name.includes('Snapchat')
+        isDefault: true // All our websites are default
       });
     }
   });
   
+  console.log('📋 Current websites from UI:', websites);
   return websites.length > 0 ? websites : getDefaultWebsites();
 }
 

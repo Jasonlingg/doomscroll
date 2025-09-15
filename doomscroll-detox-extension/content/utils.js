@@ -36,7 +36,76 @@ function init() {
     return;
   }
   
-  // Load settings from backend first
+  // Check if we already have settings locally first
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites', 'lastBackendSync'], (localResult) => {
+    // If we have recent settings (less than 5 minutes old), use them
+    const hasRecentSettings = localResult.lastBackendSync && 
+      (Date.now() - localResult.lastBackendSync) < (5 * 60 * 1000) &&
+      localResult.dailyLimit && localResult.breakReminder;
+    
+    if (hasRecentSettings) {
+      console.log('✅ Using existing local settings (recent sync)');
+      console.log('📅 Last sync:', new Date(localResult.lastBackendSync).toLocaleTimeString());
+      // Use the existing initialization logic with local settings
+      // Initialize with local settings (same logic as backend but using local data)
+      const dailyLimit = localResult.dailyLimit || 30;
+      const breakReminder = localResult.breakReminder || 15;
+      const focusMode = localResult.focusMode || false;
+      const focusSensitivity = localResult.focusSensitivity || 'medium';
+      const showOverlays = localResult.showOverlays !== false;
+      const enabled = localResult.enabled !== false;
+      const monitoredWebsites = localResult.monitoredWebsites && localResult.monitoredWebsites.length > 0 
+        ? localResult.monitoredWebsites 
+        : getDefaultWebsites();
+      
+      // Update current settings
+      const stateManager = window.stateManager;
+      stateManager.updateSettings({ dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays });
+      stateManager.updateFocusModeSensitivity(focusSensitivity);
+      
+      console.log('🚀 Initializing content script with local settings:', stateManager.getCurrentSettings());
+      console.log('📋 Monitored websites:', monitoredWebsites);
+      
+      // Check if current site is monitored
+      const currentSite = window.location.hostname;
+      const currentUrl = window.location.href;
+      const isMonitored = monitoredWebsites.some(site => {
+        if (!site.enabled) return false;
+        return currentSite.includes(site.domain) || currentUrl.includes(site.domain);
+      });
+      
+      console.log('🎯 Current site monitored?', isMonitored, 'Site:', currentSite);
+      
+      if (!enabled) {
+        console.log('❌ Extension is disabled, content script will not run');
+        return;
+      }
+      
+      if (isMonitored) {
+        console.log('✅ Site is monitored, starting tracking...');
+        window.timeTracker.startTimeTracking(dailyLimit, breakReminder);
+        window.uiManager.addUsageIndicator();
+        window.uiManager.waitForDataAndUpdate();
+        
+        if (focusMode) {
+          window.focusMode.startFocusMode();
+        }
+        
+        document.addEventListener('visibilitychange', window.timeTracker.handleVisibilityChange);
+        chrome.runtime.onMessage.addListener(window.messageHandler.handleMessage);
+      } else {
+        console.log('❌ Site is not monitored, content script will not run');
+      }
+      return;
+    }
+    
+    // Load settings from backend for new users or stale settings
+    console.log('🔄 Loading fresh settings from backend...');
+    loadSettingsFromBackend();
+  });
+}
+
+function loadSettingsFromBackend() {
   try {
     if (!chrome.runtime || !chrome.runtime.sendMessage) {
       console.warn('⚠️ Extension context invalidated - using local storage fallback');
