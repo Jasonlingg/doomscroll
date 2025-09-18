@@ -27,6 +27,67 @@ function init() {
   console.log('🔗 Current URL:', window.location.href);
   console.log('📅 Current time:', new Date().toLocaleTimeString());
   
+  // Initialize content analysis
+  if (window.contentAnalyzer && window.localClassifier) {
+    console.log('🧠 Content analysis system initialized');
+    
+    // Analyze content periodically (every 30 seconds)
+    setInterval(async () => {
+      try {
+        const contentData = window.contentAnalyzer.analyzeContent();
+        const analysis = await window.localClassifier.analyze(contentData);
+        
+        console.log('🔍 === CONTENT ANALYSIS DETAILS ===');
+        console.log('📊 Raw Content Data:', contentData);
+        console.log('🧠 Analysis Results:', analysis);
+        console.log('📈 Summary:', {
+          sentiment: analysis.sentiment,
+          content_type: analysis.content_type,
+          doom_score: analysis.doom_score,
+          model_version: analysis.model_version,
+          text_included: !!analysis.visible_text,
+          visible_text_length: analysis.visible_text ? analysis.visible_text.length : 0,
+          structured_data_keys: analysis.structured_data ? Object.keys(analysis.structured_data) : []
+        });
+        console.log('🔍 === END ANALYSIS ===');
+        
+        // Send analysis to backend (only labels by default)
+        chrome.runtime.sendMessage({
+          action: 'logContentAnalysis',
+          analysis: analysis
+        });
+        
+      } catch (error) {
+        console.warn('Content analysis error:', error);
+      }
+    }, 30000); // 30 seconds
+    
+    // Also analyze immediately on page load
+    setTimeout(async () => {
+      try {
+        const contentData = window.contentAnalyzer.analyzeContent();
+        const analysis = await window.localClassifier.analyze(contentData);
+        
+        console.log('🚀 === INITIAL CONTENT ANALYSIS ===');
+        console.log('📊 Raw Content Data:', contentData);
+        console.log('🧠 Analysis Results:', analysis);
+        console.log('📈 Summary:', {
+          sentiment: analysis.sentiment,
+          content_type: analysis.content_type,
+          doom_score: analysis.doom_score,
+          model_version: analysis.model_version,
+          text_included: !!analysis.visible_text,
+          visible_text_length: analysis.visible_text ? analysis.visible_text.length : 0,
+          structured_data_keys: analysis.structured_data ? Object.keys(analysis.structured_data) : []
+        });
+        console.log('🚀 === END INITIAL ANALYSIS ===');
+        
+      } catch (error) {
+        console.warn('Initial content analysis error:', error);
+      }
+    }, 2000); // 2 seconds after page load
+  }
+  
   // Add error handling for chrome.storage
   if (!chrome.storage) {
     console.error('❌ Chrome storage API not available');

@@ -94,6 +94,13 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Snippet AI toggle event listener added');
     }
     
+    // Add event listener for AI text analysis toggle
+    const aiTextAnalysisToggle = document.getElementById('ai-text-analysis-toggle');
+    if (aiTextAnalysisToggle) {
+        aiTextAnalysisToggle.addEventListener('change', handleAiTextAnalysisToggle);
+        console.log('✅ AI text analysis toggle event listener added');
+    }
+    
     // Add event listener for delete data button
     const deleteDataBtn = document.getElementById('delete-data');
     if (deleteDataBtn) {
@@ -855,6 +862,58 @@ function forceDailyReset() {
             showMessage('Failed to reset daily usage', 'error');
         }
     });
+}
+
+// Handle AI text analysis toggle change
+function handleAiTextAnalysisToggle() {
+    const aiTextAnalysisToggle = document.getElementById('ai-text-analysis-toggle');
+    const isEnabled = aiTextAnalysisToggle.checked;
+    
+    console.log('🤖 AI text analysis toggle changed:', isEnabled);
+    
+    // One-time disclosure before enabling
+    if (isEnabled) {
+        chrome.storage.sync.get(['ai_text_analysis_disclosed'], (res) => {
+            const alreadyDisclosed = res && res.ai_text_analysis_disclosed === true;
+            const proceed = alreadyDisclosed || confirm(
+                'AI text analysis will send visible page text to the backend for advanced analysis.\n\n'
+                + 'This includes:\n'
+                + '• Headings and captions\n'
+                + '• Visible comments\n'
+                + '• Structured data from the page\n\n'
+                + 'By default, only analysis labels are sent. This toggle enables sending the actual text.\n\n'
+                + 'Continue?'
+            );
+            if (!proceed) {
+                // Revert the toggle visually
+                aiTextAnalysisToggle.checked = false;
+                return;
+            }
+            if (!alreadyDisclosed) {
+                chrome.storage.sync.set({ ai_text_analysis_disclosed: true });
+            }
+            // Save the setting
+            chrome.storage.sync.set({ ai_text_analysis_enabled: true }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('❌ Failed to save AI text analysis setting:', chrome.runtime.lastError);
+                    showMessage('Failed to save AI text analysis setting', 'error');
+                } else {
+                    console.log('✅ AI text analysis setting saved: true');
+                    showMessage('AI text analysis enabled', 'success');
+                }
+            });
+        });
+    } else {
+        chrome.storage.sync.set({ ai_text_analysis_enabled: false }, () => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ Failed to save AI text analysis setting:', chrome.runtime.lastError);
+                showMessage('Failed to save AI text analysis setting', 'error');
+            } else {
+                console.log('✅ AI text analysis setting saved: false');
+                showMessage('AI text analysis disabled', 'success');
+            }
+        });
+    }
 }
 
 // Handle snippet AI toggle change

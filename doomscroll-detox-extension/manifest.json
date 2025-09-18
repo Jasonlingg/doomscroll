@@ -31,6 +31,10 @@
         "content/ui-manager.js",
         "content/focus-mode.js",
         "content/message-handler.js",
+        "content/dom-adapters.js",
+        "content/generic-card-extractor.js",
+        "content/content-analyzer.js",
+        "content/local-classifier.js",
         "content/utils.js",
         "content/content.js"
       ],
