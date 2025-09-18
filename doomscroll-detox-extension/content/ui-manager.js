@@ -151,17 +151,44 @@ function updateUsageIndicator(timeSpent, dailyLimit, showDamageAnimation = false
   let newBackground = 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)'; // Default purple gradient
   
   if (wholeMinutes >= dailyLimit) {
-    newBackground = 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'; // Red gradient for limit reached
+    newBackground = 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'; // Red gradient for limit reached/exceeded
+    console.log('🚨 Daily limit reached/exceeded! Turning indicator red');
   } else if (wholeMinutes >= dailyLimit * 0.8) {
-    newBackground = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'; // Yellow gradient for warning
+    newBackground = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'; // Orange gradient for warning (80%+)
+    console.log('⚠️ Approaching daily limit! Turning indicator orange');
+  } else if (wholeMinutes >= dailyLimit * 0.6) {
+    newBackground = 'linear-gradient(135deg, #eab308 0%, #facc15 100%)'; // Yellow gradient for caution (60%+)
+    console.log('⚠️ Daily limit warning zone! Turning indicator yellow');
   } else if (wholeMinutes > 0) {
     newBackground = 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)'; // Purple gradient when active
+  }
+  
+  // Add red border and glow when limit is reached/exceeded
+  let newBorder = '1px solid rgba(255, 255, 255, 0.2)';
+  let newBoxShadow = '0 4px 15px rgba(0, 0, 0, 0.3)';
+  
+  if (wholeMinutes >= dailyLimit) {
+    newBorder = '2px solid rgba(220, 38, 38, 0.8)';
+    newBoxShadow = '0 4px 20px rgba(220, 38, 38, 0.4), 0 0 30px rgba(220, 38, 38, 0.2)';
   }
   
   // Only update background if it changed
   if (indicator.style.background !== newBackground) {
     updates.push(() => {
       indicator.style.background = newBackground;
+    });
+  }
+  
+  // Update border and box shadow for limit reached state
+  if (indicator.style.border !== newBorder) {
+    updates.push(() => {
+      indicator.style.border = newBorder;
+    });
+  }
+  
+  if (indicator.style.boxShadow !== newBoxShadow) {
+    updates.push(() => {
+      indicator.style.boxShadow = newBoxShadow;
     });
   }
   
@@ -176,6 +203,13 @@ function updateUsageIndicator(timeSpent, dailyLimit, showDamageAnimation = false
   if (showDamageAnimation) {
     showDamageAnimationOnIndicator();
   }
+  
+  // Add pulsing animation when limit is reached/exceeded
+  if (wholeMinutes >= dailyLimit) {
+    indicator.classList.add('limit-reached');
+  } else {
+    indicator.classList.remove('limit-reached');
+  }
 }
 
 // Inject all CSS styles immediately when the module loads
@@ -189,6 +223,25 @@ function injectAllStyles() {
         box-shadow: 0 0 30px rgba(220, 38, 38, 1), 0 0 60px rgba(255, 100, 100, 0.6) !important;
         transform: scale(1.15) !important;
         filter: brightness(1.3) !important;
+      }
+      
+      .limit-reached {
+        animation: limitPulse 2s ease-in-out infinite;
+      }
+      
+      @keyframes limitPulse {
+        0% { 
+          box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4), 0 0 30px rgba(220, 38, 38, 0.2);
+          transform: scale(1);
+        }
+        50% { 
+          box-shadow: 0 4px 25px rgba(220, 38, 38, 0.6), 0 0 40px rgba(220, 38, 38, 0.4);
+          transform: scale(1.05);
+        }
+        100% { 
+          box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4), 0 0 30px rgba(220, 38, 38, 0.2);
+          transform: scale(1);
+        }
       }
       
       @keyframes damageShake {
