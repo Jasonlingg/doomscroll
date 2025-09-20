@@ -78,6 +78,12 @@ function loadDailyUsage() {
   if (!chrome.storage || !chrome.storage.sync) {
     console.error('❌ Chrome storage API not available');
     window.stateManager.setDailyUsage(0);
+    
+    // Show indicator even if chrome storage is not available
+    if (window.uiManager && typeof window.uiManager.addUsageIndicator === 'function') {
+      window.uiManager.addUsageIndicator();
+      console.log('✅ Indicator added after chrome storage unavailable');
+    }
     return;
   }
   
@@ -97,9 +103,21 @@ function loadDailyUsage() {
           window.stateManager.setDailyUsage(0);
           console.log('📊 No local storage found, starting fresh');
         }
+        
+        // Show indicator after localStorage data is loaded
+        if (window.uiManager && typeof window.uiManager.addUsageIndicator === 'function') {
+          window.uiManager.addUsageIndicator();
+          console.log('✅ Indicator added after localStorage data loaded');
+        }
       } catch (e) {
         console.error('❌ Local storage also failed:', e);
         window.stateManager.setDailyUsage(0);
+        
+        // Show indicator even if localStorage failed
+        if (window.uiManager && typeof window.uiManager.addUsageIndicator === 'function') {
+          window.uiManager.addUsageIndicator();
+          console.log('✅ Indicator added after localStorage error');
+        }
       }
       return;
     }
@@ -122,6 +140,15 @@ function loadDailyUsage() {
     }
     
     console.log('📊 Loaded daily usage:', window.stateManager.getDailyUsage(), 'minutes');
+    
+    // Show indicator after data is loaded
+    console.log('🔍 About to call addUsageIndicator...');
+    if (window.uiManager && typeof window.uiManager.addUsageIndicator === 'function') {
+      window.uiManager.addUsageIndicator();
+      console.log('✅ Indicator added after data loaded');
+    } else {
+      console.log('❌ uiManager or addUsageIndicator not available');
+    }
   });
 }
 

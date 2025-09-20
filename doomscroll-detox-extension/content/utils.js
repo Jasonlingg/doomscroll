@@ -93,7 +93,6 @@ function init() {
     console.error('❌ Chrome storage API not available');
     // Continue with localStorage fallback
     window.timeTracker.startTimeTracking(30, 15); // Use default values
-    window.uiManager.addUsageIndicator();
     return;
   }
   
@@ -145,7 +144,6 @@ function init() {
       if (isMonitored) {
         console.log('✅ Site is monitored, starting tracking...');
         window.timeTracker.startTimeTracking(dailyLimit, breakReminder);
-        window.uiManager.addUsageIndicator();
         window.uiManager.waitForDataAndUpdate();
         
         if (focusMode) {
@@ -233,9 +231,6 @@ function loadSettingsFromBackend() {
         // Start tracking time
         window.timeTracker.startTimeTracking(dailyLimit, breakReminder);
         
-        // Add visual indicators
-        window.uiManager.addUsageIndicator();
-        
         // Wait for data to be populated before removing loading state
         window.uiManager.waitForDataAndUpdate();
         
@@ -262,7 +257,6 @@ function loadSettingsFromBackend() {
           const stateManager = window.stateManager;
           stateManager.updateSettings({ dailyLimit: 30, breakReminder: 15, enabled: true, focusMode: false, focusSensitivity: 'medium', showOverlays: true });
           window.timeTracker.startTimeTracking(30, 15);
-          window.uiManager.addUsageIndicator();
           return;
         }
         
@@ -314,9 +308,6 @@ function loadSettingsFromBackend() {
           
           // Start tracking time
           window.timeTracker.startTimeTracking(dailyLimit, breakReminder);
-          
-          // Add visual indicators
-          window.uiManager.addUsageIndicator();
           
           // Wait for data to be populated before removing loading state
           window.uiManager.waitForDataAndUpdate();

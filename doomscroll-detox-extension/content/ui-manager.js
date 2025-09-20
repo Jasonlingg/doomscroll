@@ -92,22 +92,43 @@ function forceUpdateIndicator() {
 
 // Add usage indicator to the page
 function addUsageIndicator() {
+  // Check if indicator already exists
+  if (document.getElementById('doomscroll-indicator')) {
+    console.log('⚠️ Indicator already exists, skipping creation');
+    return;
+  }
+  
   const stateManager = window.stateManager;
   const indicator = document.createElement('div');
   indicator.id = 'doomscroll-indicator';
+  
+  // Get actual loaded data
+  const dailyUsage = stateManager.getDailyUsage() || 0;
+  const dailyLimit = stateManager.getCurrentSettings()?.dailyLimit || 30;
+  
   indicator.innerHTML = `
     <div class="doomscroll-badge">
-      <span class="time-spent">...</span>
-      <span class="daily-limit">/...</span>
+      <span class="time-spent">${dailyUsage}m</span>
+      <span class="daily-limit">/${dailyLimit}m</span>
     </div>
     <button class="settings-btn" title="Open App Settings">⚡</button>
   `;
   
-  // Add loading class for styling
-  indicator.classList.add('loading');
+  // Set background color based on usage
+  const wholeMinutes = Math.floor(dailyUsage);
+  let background = 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)'; // Default purple gradient
   
-  // Reset loading state flag for new indicator
-  stateManager.setLoadingStateRemoved(false);
+  if (wholeMinutes >= dailyLimit) {
+    background = 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'; // Red gradient for limit reached/exceeded
+  } else if (wholeMinutes >= dailyLimit * 0.8) {
+    background = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'; // Orange gradient for warning (80%+)
+  } else if (wholeMinutes >= dailyLimit * 0.6) {
+    background = 'linear-gradient(135deg, #eab308 0%, #facc15 100%)'; // Yellow gradient for caution (60%+)
+  } else if (wholeMinutes > 0) {
+    background = 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)'; // Purple gradient when active
+  }
+  
+  indicator.style.background = background;
   
   // Add click handler for settings button
   const settingsBtn = indicator.querySelector('.settings-btn');
@@ -117,6 +138,7 @@ function addUsageIndicator() {
   });
   
   document.body.appendChild(indicator);
+  console.log('✅ Indicator created with loaded data:', dailyUsage, 'minutes');
 }
 
 // Update usage indicator with performance optimizations
