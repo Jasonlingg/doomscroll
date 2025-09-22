@@ -32,12 +32,51 @@ def migrate_database():
             ("monitored_websites", "TEXT DEFAULT '[]'")
         ]
         
+        # Add ML fields to usage_events table
+        usage_events_columns = [
+            ("snippet_opt_in", "INTEGER DEFAULT 0"),
+            ("snippet_text", "TEXT"),
+            ("behavior_json", "TEXT"),
+            ("vision_json", "TEXT")
+        ]
+        
+        # Add sentiment split fields to daily_stats table
+        daily_stats_columns = [
+            ("doom_seconds", "INTEGER DEFAULT 0"),
+            ("neutral_seconds", "INTEGER DEFAULT 0"),
+            ("positive_seconds", "INTEGER DEFAULT 0")
+        ]
+        
         for column_name, column_def in new_columns:
             if column_name not in columns:
-                print(f"➕ Adding column: {column_name}")
+                print(f"➕ Adding column to users: {column_name}")
                 cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}")
             else:
-                print(f"✅ Column already exists: {column_name}")
+                print(f"✅ Column already exists in users: {column_name}")
+        
+        # Check and add ML fields to usage_events table
+        cursor.execute("PRAGMA table_info(usage_events)")
+        usage_events_existing_columns = [column[1] for column in cursor.fetchall()]
+        print(f"\n📊 Current usage_events columns: {usage_events_existing_columns}")
+        
+        for column_name, column_def in usage_events_columns:
+            if column_name not in usage_events_existing_columns:
+                print(f"➕ Adding column to usage_events: {column_name}")
+                cursor.execute(f"ALTER TABLE usage_events ADD COLUMN {column_name} {column_def}")
+            else:
+                print(f"✅ Column already exists in usage_events: {column_name}")
+        
+        # Check and add sentiment fields to daily_stats table
+        cursor.execute("PRAGMA table_info(daily_stats)")
+        daily_stats_existing_columns = [column[1] for column in cursor.fetchall()]
+        print(f"\n📊 Current daily_stats columns: {daily_stats_existing_columns}")
+        
+        for column_name, column_def in daily_stats_columns:
+            if column_name not in daily_stats_existing_columns:
+                print(f"➕ Adding column to daily_stats: {column_name}")
+                cursor.execute(f"ALTER TABLE daily_stats ADD COLUMN {column_name} {column_def}")
+            else:
+                print(f"✅ Column already exists in daily_stats: {column_name}")
         
         conn.commit()
         print("✅ Database migration completed successfully!")
