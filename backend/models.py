@@ -52,6 +52,12 @@ class UsageEvent(Base):
     extension_version = Column(String(20), nullable=True)
     browser = Column(String(50), nullable=True)
     
+    # ML fields
+    snippet_opt_in = Column(Integer, default=0)
+    snippet_text = Column(Text, nullable=True)
+    behavior_json = Column(Text, nullable=True)
+    vision_json = Column(Text, nullable=True)
+    
     # Indexes
     __table_args__ = (
         Index('idx_usage_user_timestamp', 'user_id', 'timestamp'),
@@ -72,6 +78,11 @@ class DailyStats(Base):
     page_views = Column(Integer, default=0)
     focus_alerts = Column(Integer, default=0)
     break_reminders = Column(Integer, default=0)
+    
+    # Sentiment splits
+    doom_seconds = Column(Integer, default=0)
+    neutral_seconds = Column(Integer, default=0)
+    positive_seconds = Column(Integer, default=0)
     
     # Indexes
     __table_args__ = (

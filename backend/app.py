@@ -15,6 +15,7 @@ from collections import defaultdict
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
+from services.ml import classify_content
 
 # FastAPI app
 app = FastAPI(
@@ -59,6 +60,22 @@ class AnalyticsRequest(BaseModel):
     user_id: Optional[str] = None
     days: int = 7
     event_type: Optional[str] = None
+# ML request/response schemas
+class MLAnalyzeRequest(BaseModel):
+    visible_text: Optional[str] = None
+    structured_data: Optional[Dict[str, Any]] = None
+    url: Optional[str] = None
+    hostname: Optional[str] = None
+
+class MLAnalyzeResponse(BaseModel):
+    sentiment: str
+    content_type: str
+    doom_score: float
+    scroll_score: float
+    hf_ok: bool
+    model_version: str
+    timestamp: float
+
 
 # Database helper
 def get_db():
@@ -129,6 +146,18 @@ async def log_events(event_batch: EventBatch):
             "error": str(e),
             "message": "Failed to log events"
         }
+
+@app.post("/api/v1/ml/analyze", response_model=MLAnalyzeResponse)
+async def ml_analyze(payload: MLAnalyzeRequest):
+    """Server-side content analysis using heuristic classifier.
+
+    This endpoint will later route to a Hugging Face model. For now, hf_ok=False.
+    """
+    try:
+        result = classify_content(payload.dict())
+        return MLAnalyzeResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/users/{user_id}/stats")
 async def get_user_stats(user_id: str, days: int = 7):

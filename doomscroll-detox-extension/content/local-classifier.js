@@ -134,6 +134,10 @@ class LocalClassifier {
       sentiment,
       content_type: contentType,
       doom_score: Math.round(doomScore * 100) / 100, // Round to 2 decimal places
+      // Heuristic scroll score: initially mirror doom_score; replace with HF later
+      scroll_score: Math.round(doomScore * 100) / 100,
+      // Hugging Face not integrated yet
+      hf_ok: false,
       model_version: this.modelVersion,
       timestamp: Date.now()
     };

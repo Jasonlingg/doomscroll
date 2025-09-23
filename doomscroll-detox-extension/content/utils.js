@@ -31,11 +31,54 @@ function init() {
   if (window.contentAnalyzer && window.localClassifier) {
     console.log('🧠 Content analysis system initialized');
     
+    // Backend ML analysis helper with local fallback
+    async function analyzeContentWithBackend(contentData) {
+      try {
+        const includeText = await window.localClassifier.isAiTextAnalysisEnabled();
+        const payload = {
+          visible_text: includeText ? contentData.visible_text : null,
+          structured_data: contentData.structured_data || {},
+          url: contentData.url,
+          hostname: contentData.hostname
+        };
+        const resp = await fetch('http://127.0.0.1:8000/api/v1/ml/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error('ML analyze HTTP ' + resp.status);
+        const result = await resp.json();
+        return {
+          ...result,
+          url: contentData.url,
+          hostname: contentData.hostname
+        };
+      } catch (e) {
+        console.warn('ML backend unavailable, using local classifier:', e.message);
+        return window.localClassifier.analyze(contentData);
+      }
+    }
+
+    // Track analysis state to prevent overlapping calls
+    let isAnalyzing = false;
+    
     // Analyze content periodically (every 30 seconds)
     setInterval(async () => {
+      // Only run when tab is visible and not already analyzing
+      if (document.visibilityState !== 'visible') {
+        console.log('⏸️ Skipping analysis - tab not visible');
+        return;
+      }
+      
+      if (isAnalyzing) {
+        console.log('⏸️ Skipping analysis - already in progress');
+        return;
+      }
+      
+      isAnalyzing = true;
       try {
         const contentData = window.contentAnalyzer.analyzeContent();
-        const analysis = await window.localClassifier.analyze(contentData);
+        const analysis = await analyzeContentWithBackend(contentData);
         
         console.log('🔍 === CONTENT ANALYSIS DETAILS ===');
         console.log('📊 Raw Content Data:', contentData);
@@ -44,6 +87,8 @@ function init() {
           sentiment: analysis.sentiment,
           content_type: analysis.content_type,
           doom_score: analysis.doom_score,
+          scroll_score: analysis.scroll_score,
+          hf_ok: analysis.hf_ok,
           model_version: analysis.model_version,
           text_included: !!analysis.visible_text,
           visible_text_length: analysis.visible_text ? analysis.visible_text.length : 0,
@@ -59,14 +104,28 @@ function init() {
         
       } catch (error) {
         console.warn('Content analysis error:', error);
+      } finally {
+        isAnalyzing = false;
       }
     }, 30000); // 30 seconds
     
     // Also analyze immediately on page load
     setTimeout(async () => {
+      // Only run if tab is visible and not already analyzing
+      if (document.visibilityState !== 'visible') {
+        console.log('⏸️ Skipping initial analysis - tab not visible');
+        return;
+      }
+      
+      if (isAnalyzing) {
+        console.log('⏸️ Skipping initial analysis - already in progress');
+        return;
+      }
+      
+      isAnalyzing = true;
       try {
         const contentData = window.contentAnalyzer.analyzeContent();
-        const analysis = await window.localClassifier.analyze(contentData);
+        const analysis = await analyzeContentWithBackend(contentData);
         
         console.log('🚀 === INITIAL CONTENT ANALYSIS ===');
         console.log('📊 Raw Content Data:', contentData);
@@ -75,6 +134,8 @@ function init() {
           sentiment: analysis.sentiment,
           content_type: analysis.content_type,
           doom_score: analysis.doom_score,
+          scroll_score: analysis.scroll_score,
+          hf_ok: analysis.hf_ok,
           model_version: analysis.model_version,
           text_included: !!analysis.visible_text,
           visible_text_length: analysis.visible_text ? analysis.visible_text.length : 0,
@@ -84,6 +145,8 @@ function init() {
         
       } catch (error) {
         console.warn('Initial content analysis error:', error);
+      } finally {
+        isAnalyzing = false;
       }
     }, 2000); // 2 seconds after page load
   }
