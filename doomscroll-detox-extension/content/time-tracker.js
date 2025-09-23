@@ -252,6 +252,34 @@ function handleVisibilityChange() {
       console.log('🔄 Reset session timer for new tab session');
     }
     
+    // Resync latest usage from storage to reflect updates from other tabs
+    // This ensures the indicator is accurate immediately on tab switch
+    try {
+      if (chrome.storage && chrome.storage.sync) {
+        chrome.storage.sync.get(['dailyUsage'], (result) => {
+          const storedUsage = Math.floor(result.dailyUsage || 0);
+          if (storedUsage > stateManager.getDailyUsage()) {
+            console.log('🔁 Resyncing usage on visibility change:', stateManager.getDailyUsage(), '->', storedUsage);
+            stateManager.setDailyUsage(storedUsage);
+            // Persist and update UI immediately
+            saveDailyUsage();
+            window.uiManager.updateUsageIndicator(storedUsage, stateManager.getCurrentSettings().dailyLimit, false);
+            window.uiManager.forceUpdateIndicator && window.uiManager.forceUpdateIndicator();
+          } else {
+            // Still refresh UI to ensure indicator reflects current settings/usage
+            window.uiManager.updateUsageIndicator(stateManager.getDailyUsage(), stateManager.getCurrentSettings().dailyLimit, false);
+            window.uiManager.forceUpdateIndicator && window.uiManager.forceUpdateIndicator();
+          }
+        });
+      } else {
+        // Fallback: just force UI update with in-memory state
+        window.uiManager.updateUsageIndicator(stateManager.getDailyUsage(), stateManager.getCurrentSettings().dailyLimit, false);
+        window.uiManager.forceUpdateIndicator && window.uiManager.forceUpdateIndicator();
+      }
+    } catch (e) {
+      console.warn('⚠️ Error during visibility resync:', e.message);
+    }
+    
     // Resume focus mode timer if it was active
     if (stateManager.getFocusModeActive() && !stateManager.getFocusModeAlertShown()) {
       startFocusModeTimer();
