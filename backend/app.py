@@ -15,6 +15,8 @@ from collections import defaultdict
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
+import threading
+import time
 from services.ml import classify_content
 
 # FastAPI app
@@ -36,12 +38,17 @@ app.add_middleware(
 # Pydantic models
 class EventData(BaseModel):
     user_id: str
-    event_type: str  # page_view, scroll, focus_alert, etc.
+    event_type: str  # page_view, scroll, focus_alert, content_analysis, etc.
     domain: str
     url: Optional[str] = None
     duration: Optional[int] = None  # seconds
     extension_version: Optional[str] = None
     browser: Optional[str] = None
+    # ML fields (optional)
+    snippet_opt_in: Optional[int] = 0
+    snippet_text: Optional[str] = None
+    behavior_json: Optional[Dict[str, Any]] = None
+    vision_json: Optional[Dict[str, Any]] = None
 
 class EventBatch(BaseModel):
     events: List[EventData]
@@ -76,6 +83,16 @@ class MLAnalyzeResponse(BaseModel):
     model_version: str
     timestamp: float
 
+class MLAnalyzeAndLogRequest(MLAnalyzeRequest):
+    user_id: str
+    event_type: Optional[str] = "content_analysis"
+    domain: Optional[str] = None
+    extension_version: Optional[str] = None
+    browser: Optional[str] = None
+
+class MLAnalyzeAndLogResponse(MLAnalyzeResponse):
+    persisted: bool
+
 
 # Database helper
 def get_db():
@@ -83,6 +100,90 @@ def get_db():
 
 def hash_user_id(user_id: str) -> str:
     return hashlib.sha256(user_id.encode()).hexdigest()
+
+# --- Periodic Rollup Job (every 30 minutes) ---
+SECONDS_PER_ANALYSIS = 30
+
+def _compute_sentiment_seconds(days: int = 2):
+    """Compute doom/neutral/positive seconds per (user_id, date) from usage_events.
+    Overwrites daily_stats for those days to avoid double counting.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    cursor.execute(
+        """
+        SELECT user_id, timestamp, behavior_json
+        FROM usage_events
+        WHERE event_type = 'content_analysis' AND timestamp >= ?
+        """,
+        (cutoff,)
+    )
+    rows = cursor.fetchall()
+    # Aggregate in Python to avoid requiring SQLite JSON1 extension
+    aggregates: Dict[tuple, Dict[str, int]] = {}
+    for user_id, ts, behavior in rows:
+        try:
+            sent = None
+            if behavior:
+                data = json.loads(behavior)
+                sent = str(data.get("sentiment")) if isinstance(data, dict) else None
+            date_key = datetime.fromisoformat(ts).date().isoformat() if ts else datetime.now().date().isoformat()
+            key = (user_id, date_key)
+            if key not in aggregates:
+                aggregates[key] = {"doom": 0, "neutral": 0, "positive": 0}
+            if sent == "negative":
+                aggregates[key]["doom"] += SECONDS_PER_ANALYSIS
+            elif sent == "neutral":
+                aggregates[key]["neutral"] += SECONDS_PER_ANALYSIS
+            elif sent == "positive":
+                aggregates[key]["positive"] += SECONDS_PER_ANALYSIS
+        except Exception:
+            continue
+
+    # Upsert: set values to computed seconds for exactness
+    for (user_id, date_str), vals in aggregates.items():
+        cursor.execute(
+            """
+            INSERT INTO daily_stats (user_id, date, doom_seconds, neutral_seconds, positive_seconds)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+              doom_seconds=excluded.doom_seconds,
+              neutral_seconds=excluded.neutral_seconds,
+              positive_seconds=excluded.positive_seconds
+            """,
+            (
+                user_id,
+                # Store full datetime at midnight
+                datetime.fromisoformat(date_str + "T00:00:00").isoformat(),
+                int(vals.get("doom", 0)),
+                int(vals.get("neutral", 0)),
+                int(vals.get("positive", 0)),
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+def _rollup_loop(interval_seconds: int = 1800):
+    while True:
+        try:
+            _compute_sentiment_seconds(days=2)
+        except Exception:
+            pass
+        time.sleep(interval_seconds)
+
+_rollup_thread_started = False
+
+@app.on_event("startup")
+async def start_rollup_job():
+    global _rollup_thread_started
+    if _rollup_thread_started:
+        return
+    # Avoid double-start under reload by checking process role
+    if os.getenv("RUN_MAIN") == "true" or True:
+        t = threading.Thread(target=_rollup_loop, args=(1800,), daemon=True)
+        t.start()
+        _rollup_thread_started = True
 
 # API endpoints
 @app.get("/")
@@ -107,10 +208,15 @@ async def log_events(event_batch: EventBatch):
             hashed_user_id = hash_user_id(event.user_id)
             
             # Insert event
+            # Prepare ML JSON fields
+            behavior_json_str = json.dumps(event.behavior_json) if event.behavior_json else None
+            vision_json_str = json.dumps(event.vision_json) if event.vision_json else None
+
             cursor.execute("""
                 INSERT INTO usage_events 
-                (user_id, event_type, timestamp, domain, url, duration, extension_version, browser)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, event_type, timestamp, domain, url, duration, extension_version, browser,
+                 snippet_opt_in, snippet_text, behavior_json, vision_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 hashed_user_id,
                 event.event_type,
@@ -119,7 +225,11 @@ async def log_events(event_batch: EventBatch):
                 event.url,
                 event.duration,
                 event.extension_version,
-                event.browser
+                event.browser,
+                int(event.snippet_opt_in or 0),
+                event.snippet_text,
+                behavior_json_str,
+                vision_json_str
             ))
             
             # Update user last_active
@@ -156,6 +266,52 @@ async def ml_analyze(payload: MLAnalyzeRequest):
     try:
         result = classify_content(payload.dict())
         return MLAnalyzeResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/ml/analyze_and_log", response_model=MLAnalyzeAndLogResponse)
+async def ml_analyze_and_log(payload: MLAnalyzeAndLogRequest):
+    """Analyze content and persist result into usage_events in one call."""
+    try:
+        analysis = classify_content(payload.dict())
+
+        # Persist event with ML fields
+        conn = get_db()
+        cursor = conn.cursor()
+        hashed_user_id = hash_user_id(payload.user_id)
+        cursor.execute(
+            """
+            INSERT INTO usage_events 
+            (user_id, event_type, timestamp, domain, url, duration, extension_version, browser,
+             snippet_opt_in, snippet_text, behavior_json, vision_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                hashed_user_id,
+                payload.event_type or "content_analysis",
+                datetime.now().isoformat(),
+                payload.hostname or (payload.url or "").split("/")[2] if payload.url else None,
+                payload.url,
+                0,
+                payload.extension_version,
+                payload.browser,
+                1 if payload.visible_text else 0,
+                payload.visible_text,
+                json.dumps({
+                    "sentiment": analysis["sentiment"],
+                    "content_type": analysis["content_type"],
+                    "doom_score": analysis["doom_score"],
+                    "scroll_score": analysis["scroll_score"],
+                    "hf_ok": analysis["hf_ok"],
+                    "model_version": analysis["model_version"]
+                }),
+                None
+            )
+        )
+        conn.commit()
+        conn.close()
+
+        return MLAnalyzeAndLogResponse(**analysis, persisted=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -425,6 +581,32 @@ async def get_analytics_overview(days: int = 7):
         "events_by_type": events_by_type,
         "top_domains": top_domains,
         "daily_trends": daily_trends
+    }
+
+@app.get("/api/v1/analytics/sentiment-seconds")
+async def get_sentiment_seconds(days: int = 7):
+    """Aggregate doom/neutral/positive seconds from daily_stats."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+    cursor.execute(
+        """
+        SELECT 
+            COALESCE(SUM(doom_seconds), 0),
+            COALESCE(SUM(neutral_seconds), 0),
+            COALESCE(SUM(positive_seconds), 0)
+        FROM daily_stats
+        WHERE date >= ?
+        """,
+        (cutoff_date,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return {
+        "doom_seconds": row[0] or 0,
+        "neutral_seconds": row[1] or 0,
+        "positive_seconds": row[2] or 0,
+        "period_days": days
     }
 
 @app.get("/api/v1/analytics/users")

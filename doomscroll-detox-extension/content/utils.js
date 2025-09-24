@@ -41,12 +41,19 @@ function init() {
           url: contentData.url,
           hostname: contentData.hostname
         };
-        const resp = await fetch('http://127.0.0.1:8000/api/v1/ml/analyze', {
+        // Prefer single-call analyze_and_log (atomic). Fallback to analyze-only
+        const resp = await fetch('http://127.0.0.1:8000/api/v1/ml/analyze_and_log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            ...payload,
+            user_id: 'user_123',
+            event_type: 'content_analysis',
+            extension_version: '1.0.0',
+            browser: 'Chrome'
+          })
         });
-        if (!resp.ok) throw new Error('ML analyze HTTP ' + resp.status);
+        if (!resp.ok) throw new Error('ML analyze_and_log HTTP ' + resp.status);
         const result = await resp.json();
         return {
           ...result,
@@ -54,8 +61,31 @@ function init() {
           hostname: contentData.hostname
         };
       } catch (e) {
-        console.warn('ML backend unavailable, using local classifier:', e.message);
-        return window.localClassifier.analyze(contentData);
+        console.warn('ML analyze_and_log failed, trying analyze-only:', e.message);
+        try {
+          const includeText = await window.localClassifier.isAiTextAnalysisEnabled();
+          const payload2 = {
+            visible_text: includeText ? contentData.visible_text : null,
+            structured_data: contentData.structured_data || {},
+            url: contentData.url,
+            hostname: contentData.hostname
+          };
+          const resp2 = await fetch('http://127.0.0.1:8000/api/v1/ml/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload2)
+          });
+          if (!resp2.ok) throw new Error('ML analyze HTTP ' + resp2.status);
+          const result2 = await resp2.json();
+          return {
+            ...result2,
+            url: contentData.url,
+            hostname: contentData.hostname
+          };
+        } catch (e2) {
+          console.warn('ML analyze-only failed, using local classifier:', e2.message);
+          return window.localClassifier.analyze(contentData);
+        }
       }
     }
 
@@ -96,11 +126,38 @@ function init() {
         });
         console.log('🔍 === END ANALYSIS ===');
         
-        // Send analysis to backend (only labels by default)
-        chrome.runtime.sendMessage({
-          action: 'logContentAnalysis',
-          analysis: analysis
-        });
+        // No-op: analyze_and_log already persisted if it succeeded
+        // Send analysis to backend (persist in usage_events)
+        try {
+          await fetch('http://127.0.0.1:8000/api/v1/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              events: [{
+                user_id: 'user_123',
+                event_type: 'content_analysis',
+                domain: window.location.hostname,
+                url: window.location.href,
+                duration: 0,
+                extension_version: '1.0.0',
+                browser: 'Chrome',
+                snippet_opt_in: analysis.visible_text ? 1 : 0,
+                snippet_text: analysis.visible_text || null,
+                behavior_json: {
+                  sentiment: analysis.sentiment,
+                  content_type: analysis.content_type,
+                  doom_score: analysis.doom_score,
+                  scroll_score: analysis.scroll_score,
+                  hf_ok: analysis.hf_ok,
+                  model_version: analysis.model_version
+                },
+                vision_json: null
+              }]
+            })
+          });
+        } catch (e) {
+          console.warn('Failed to persist content analysis event:', e.message);
+        }
         
       } catch (error) {
         console.warn('Content analysis error:', error);

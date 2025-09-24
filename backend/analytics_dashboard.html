@@ -195,6 +195,14 @@
         <div id="content">
             <div class="loading">Loading analytics...</div>
         </div>
+
+        <div class="stats-grid" style="margin-top: 20px;">
+            <div class="stat-card">
+                <h3>🧭 Sentiment Seconds (Last <span id="sent-days">7</span> days)</h3>
+                <div id="sentiment-seconds" class="stat-value">--</div>
+                <div class="stat-label">Doom | Neutral | Positive</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -284,8 +292,20 @@
                 `;
                 
                 document.getElementById('content').innerHTML = content;
+                await loadSentimentSeconds(days);
             } catch (error) {
                 showError('Failed to load overview: ' + error.message);
+            }
+        }
+
+        async function loadSentimentSeconds(days = 7) {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/analytics/sentiment-seconds?days=${days}`);
+                const agg = await res.json();
+                document.getElementById('sent-days').textContent = String(days);
+                document.getElementById('sentiment-seconds').textContent = `${agg.doom_seconds} | ${agg.neutral_seconds} | ${agg.positive_seconds}`;
+            } catch (e) {
+                document.getElementById('sentiment-seconds').textContent = 'N/A';
             }
         }
         
