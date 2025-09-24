@@ -87,12 +87,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Force reset button event listener added');
     }
     
-    // Add event listener for snippet AI toggle
-    const snippetAiToggle = document.getElementById('snippet-ai-toggle');
-    if (snippetAiToggle) {
-        snippetAiToggle.addEventListener('change', handleSnippetAiToggle);
-        console.log('✅ Snippet AI toggle event listener added');
-    }
     
     // Add event listener for AI text analysis toggle
     const aiTextAnalysisToggle = document.getElementById('ai-text-analysis-toggle');
@@ -157,7 +151,6 @@ function loadSettings() {
             focusMode: response.settings.focusMode || false,
             focusSensitivity: response.settings.focusSensitivity || 'medium',
             showOverlays: response.settings.showOverlays !== false,
-            snippet_ai_enabled: response.settings.snippet_ai_enabled || false,
             monitoredWebsites: response.settings.monitoredWebsites || getDefaultWebsites()
           };
           
@@ -183,7 +176,7 @@ function loadSettings() {
 function loadSettingsFromLocalStorage() {
   console.log('📦 Loading settings from local storage...');
   
-  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'snippet_ai_enabled', 'monitoredWebsites'], (localResult) => {
+  chrome.storage.sync.get(['dailyLimit', 'breakReminder', 'focusMode', 'focusSensitivity', 'showOverlays', 'enabled', 'monitoredWebsites'], (localResult) => {
     console.log('📦 Local storage fallback:', localResult);
     
     const localSettings = {
@@ -193,7 +186,6 @@ function loadSettingsFromLocalStorage() {
       focusMode: localResult.focusMode || false,
       focusSensitivity: localResult.focusSensitivity || 'medium',
       showOverlays: localResult.showOverlays !== false,
-      snippet_ai_enabled: localResult.snippet_ai_enabled || false,
       monitoredWebsites: localResult.monitoredWebsites || getDefaultWebsites()
     };
     
@@ -271,7 +263,6 @@ function updateFormElements(settings) {
   const focusModeToggle = document.getElementById('focus-mode-toggle');
   const focusSensitivity = document.getElementById('focus-sensitivity');
   const overlayToggle = document.getElementById('overlay-toggle');
-  const snippetAiToggle = document.getElementById('snippet-ai-toggle');
   
   if (dailyLimitInput) dailyLimitInput.value = settings.dailyLimit;
   if (breakReminderInput) breakReminderInput.value = settings.breakReminder;
@@ -279,7 +270,6 @@ function updateFormElements(settings) {
   if (focusModeToggle) focusModeToggle.checked = settings.focusMode;
   if (focusSensitivity) focusSensitivity.value = settings.focusSensitivity;
   if (overlayToggle) overlayToggle.checked = settings.showOverlays;
-  if (snippetAiToggle) snippetAiToggle.checked = settings.snippet_ai_enabled;
   
   // Load website list
   loadWebsiteList(settings.monitoredWebsites);
@@ -339,9 +329,8 @@ function saveSettings() {
   const focusMode = document.getElementById('focus-mode-toggle').checked;
   const focusSensitivity = document.getElementById('focus-sensitivity').value;
   const showOverlays = document.getElementById('overlay-toggle').checked;
-  const snippetAiEnabled = document.getElementById('snippet-ai-toggle').checked;
   
-  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays, snippetAiEnabled });
+  console.log('📝 Settings to save:', { dailyLimit, breakReminder, enabled, focusMode, focusSensitivity, showOverlays });
   
   // Validate inputs
   if (dailyLimit < 5 || dailyLimit > 480) {
@@ -370,7 +359,6 @@ function saveSettings() {
     focusMode: focusMode,
     focusSensitivity: focusSensitivity,
     showOverlays: showOverlays,
-    snippet_ai_enabled: snippetAiEnabled,
     monitoredWebsites: monitoredWebsites
   };
   
@@ -916,24 +904,6 @@ function handleAiTextAnalysisToggle() {
     }
 }
 
-// Handle snippet AI toggle change
-function handleSnippetAiToggle() {
-    const snippetAiToggle = document.getElementById('snippet-ai-toggle');
-    const isEnabled = snippetAiToggle.checked;
-    
-    console.log('🤖 Snippet AI toggle changed:', isEnabled);
-    
-    // Save the setting immediately
-    chrome.storage.sync.set({ snippet_ai_enabled: isEnabled }, () => {
-        if (chrome.runtime.lastError) {
-            console.error('❌ Failed to save snippet AI setting:', chrome.runtime.lastError);
-            showMessage('Failed to save AI setting', 'error');
-        } else {
-            console.log('✅ Snippet AI setting saved:', isEnabled);
-            showMessage(`AI snippet analysis ${isEnabled ? 'enabled' : 'disabled'}`, 'success');
-        }
-    });
-}
 
 // Delete user data function
 function deleteUserData() {
