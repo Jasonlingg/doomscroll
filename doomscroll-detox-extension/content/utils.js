@@ -33,60 +33,9 @@ function init() {
     
     // Backend ML analysis helper with local fallback
     async function analyzeContentWithBackend(contentData) {
-      try {
-        const includeText = await window.localClassifier.isAiTextAnalysisEnabled();
-        const payload = {
-          visible_text: includeText ? contentData.visible_text : null,
-          structured_data: contentData.structured_data || {},
-          url: contentData.url,
-          hostname: contentData.hostname
-        };
-        // Prefer single-call analyze_and_log (atomic). Fallback to analyze-only
-        const resp = await fetch('http://127.0.0.1:8000/api/v1/ml/analyze_and_log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...payload,
-            user_id: 'user_123',
-            event_type: 'content_analysis',
-            extension_version: '1.0.0',
-            browser: 'Chrome'
-          })
-        });
-        if (!resp.ok) throw new Error('ML analyze_and_log HTTP ' + resp.status);
-        const result = await resp.json();
-        return {
-          ...result,
-          url: contentData.url,
-          hostname: contentData.hostname
-        };
-      } catch (e) {
-        console.warn('ML analyze_and_log failed, trying analyze-only:', e.message);
-        try {
-          const includeText = await window.localClassifier.isAiTextAnalysisEnabled();
-          const payload2 = {
-            visible_text: includeText ? contentData.visible_text : null,
-            structured_data: contentData.structured_data || {},
-            url: contentData.url,
-            hostname: contentData.hostname
-          };
-          const resp2 = await fetch('http://127.0.0.1:8000/api/v1/ml/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload2)
-          });
-          if (!resp2.ok) throw new Error('ML analyze HTTP ' + resp2.status);
-          const result2 = await resp2.json();
-          return {
-            ...result2,
-            url: contentData.url,
-            hostname: contentData.hostname
-          };
-        } catch (e2) {
-          console.warn('ML analyze-only failed, using local classifier:', e2.message);
-          return window.localClassifier.analyze(contentData);
-        }
-      }
+      // Backend disabled for production - use local classifier only
+      console.warn('ML backend disabled for production, using local classifier');
+      return window.localClassifier.analyze(contentData);
     }
 
     // Track analysis state to prevent overlapping calls

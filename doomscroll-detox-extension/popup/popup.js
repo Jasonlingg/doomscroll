@@ -1,105 +1,69 @@
 // Popup script for Doomscroll Detox extension
 
-console.log('🚀 Popup script loaded!');
-console.log('📅 Current time:', new Date().toLocaleString());
-console.log('🔧 Testing basic functionality...');
-
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 DOM Content Loaded - popup ready!');
-    console.log('🔍 Checking if elements exist...');
-    console.log('Save button exists:', !!document.getElementById('save-settings'));
-    console.log('Daily limit input exists:', !!document.getElementById('daily-limit-input'));
     
     // Initialize popup
     loadSettings();
     loadStats();
     
     // Add event listeners
-    console.log('🔗 Adding event listeners...');
-    
     const saveButton = document.getElementById('save-settings');
     const resetButton = document.getElementById('reset-today');
     const refreshButton = document.getElementById('refresh-settings');
     const toggleCheckbox = document.getElementById('enabled-toggle');
     
-    console.log('🔍 Button elements found:', {
-        saveButton: !!saveButton,
-        resetButton: !!resetButton,
-        toggleCheckbox: !!toggleCheckbox
-    });
-    
     if (saveButton) {
         saveButton.addEventListener('click', function() {
-            console.log('🎯 Save button clicked!');
             saveSettings();
         });
-        console.log('✅ Save button event listener added');
-    } else {
-        console.log('❌ Save button not found!');
     }
     
     if (resetButton) {
         resetButton.addEventListener('click', resetToday);
-        console.log('✅ Reset button event listener added');
     }
     
     if (refreshButton) {
         refreshButton.addEventListener('click', function() {
-            console.log('🔄 Refresh button clicked!');
             refreshAllContentScripts();
             showMessage('Settings refreshed on all tabs!', 'success');
         });
-        console.log('✅ Refresh button event listener added');
     }
     
     if (toggleCheckbox) {
         toggleCheckbox.addEventListener('change', handleToggleChange);
-        console.log('✅ Toggle checkbox event listener added');
     }
     
     const focusModeToggle = document.getElementById('focus-mode-toggle');
     if (focusModeToggle) {
         focusModeToggle.addEventListener('change', handleFocusModeToggle);
-        console.log('✅ Focus mode toggle event listener added');
     }
     
     const addWebsiteBtn = document.getElementById('add-website-btn');
     if (addWebsiteBtn) {
         addWebsiteBtn.addEventListener('click', addNewWebsite);
-        console.log('✅ Add website button event listener added');
     }
     
     const addCurrentSiteBtn = document.getElementById('add-current-site');
     if (addCurrentSiteBtn) {
         addCurrentSiteBtn.addEventListener('click', addCurrentSite);
-        console.log('✅ Add current site button event listener added');
     }
     
     const blockCurrentSiteBtn = document.getElementById('block-current-site');
     if (blockCurrentSiteBtn) {
         blockCurrentSiteBtn.addEventListener('click', blockCurrentSite);
-        console.log('✅ Block current site button event listener added');
     }
     
     const forceResetBtn = document.getElementById('force-reset');
     if (forceResetBtn) {
         forceResetBtn.addEventListener('click', forceDailyReset);
-        console.log('✅ Force reset button event listener added');
     }
     
     
-    // Add event listener for AI text analysis toggle
-    const aiTextAnalysisToggle = document.getElementById('ai-text-analysis-toggle');
-    if (aiTextAnalysisToggle) {
-        aiTextAnalysisToggle.addEventListener('change', handleAiTextAnalysisToggle);
-        console.log('✅ AI text analysis toggle event listener added');
-    }
     
     // Add event listener for delete data button
     const deleteDataBtn = document.getElementById('delete-data');
     if (deleteDataBtn) {
         deleteDataBtn.addEventListener('click', deleteUserData);
-        console.log('✅ Delete data button event listener added');
     }
     
     // Add collapsible section functionality
@@ -120,8 +84,6 @@ document.addEventListener('DOMContentLoaded', function() {
             websitesToggle.classList.toggle('collapsed');
         });
     }
-    
-    console.log('✅ Event listeners setup complete');
 });
 
 // Load current settings from storage (only if not already loaded)
@@ -852,57 +814,6 @@ function forceDailyReset() {
     });
 }
 
-// Handle AI text analysis toggle change
-function handleAiTextAnalysisToggle() {
-    const aiTextAnalysisToggle = document.getElementById('ai-text-analysis-toggle');
-    const isEnabled = aiTextAnalysisToggle.checked;
-    
-    console.log('🤖 AI text analysis toggle changed:', isEnabled);
-    
-    // One-time disclosure before enabling
-    if (isEnabled) {
-        chrome.storage.sync.get(['ai_text_analysis_disclosed'], (res) => {
-            const alreadyDisclosed = res && res.ai_text_analysis_disclosed === true;
-            const proceed = alreadyDisclosed || confirm(
-                'AI text analysis will send visible page text to the backend for advanced analysis.\n\n'
-                + 'This includes:\n'
-                + '• Headings and captions\n'
-                + '• Visible comments\n'
-                + '• Structured data from the page\n\n'
-                + 'By default, only analysis labels are sent. This toggle enables sending the actual text.\n\n'
-                + 'Continue?'
-            );
-            if (!proceed) {
-                // Revert the toggle visually
-                aiTextAnalysisToggle.checked = false;
-                return;
-            }
-            if (!alreadyDisclosed) {
-                chrome.storage.sync.set({ ai_text_analysis_disclosed: true });
-            }
-            // Save the setting
-            chrome.storage.sync.set({ ai_text_analysis_enabled: true }, () => {
-                if (chrome.runtime.lastError) {
-                    console.error('❌ Failed to save AI text analysis setting:', chrome.runtime.lastError);
-                    showMessage('Failed to save AI text analysis setting', 'error');
-                } else {
-                    console.log('✅ AI text analysis setting saved: true');
-                    showMessage('AI text analysis enabled', 'success');
-                }
-            });
-        });
-    } else {
-        chrome.storage.sync.set({ ai_text_analysis_enabled: false }, () => {
-            if (chrome.runtime.lastError) {
-                console.error('❌ Failed to save AI text analysis setting:', chrome.runtime.lastError);
-                showMessage('Failed to save AI text analysis setting', 'error');
-            } else {
-                console.log('✅ AI text analysis setting saved: false');
-                showMessage('AI text analysis disabled', 'success');
-            }
-        });
-    }
-}
 
 
 // Delete user data function
@@ -946,30 +857,8 @@ function deleteUserData() {
             // Call backend to delete user data
             chrome.storage.sync.get(['device_id'], (result) => {
                 if (result.device_id) {
-                    // Send delete request to backend
-                    fetch('http://localhost:8000/api/v1/users/delete', {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Device-Token': result.device_id
-                        }
-                    }).then(response => {
-                        if (response.ok) {
-                            console.log('✅ Backend data deleted successfully');
-                            showMessage('All data deleted successfully!', 'success');
-                            
-                            // Reload the popup to reflect cleared state
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 2000);
-                        } else {
-                            console.log('⚠️ Backend deletion failed, but local data cleared');
-                            showMessage('Local data deleted (backend unavailable)', 'warning');
-                        }
-                    }).catch(error => {
-                        console.log('⚠️ Backend deletion failed:', error);
-                        showMessage('Local data deleted (backend unavailable)', 'warning');
-                    });
+                    // Backend disabled for production - skip backend deletion
+                    console.log('Backend disabled for production, skipping backend deletion');
                 } else {
                     console.log('✅ No device ID found, only local data cleared');
                     showMessage('All data deleted successfully!', 'success');

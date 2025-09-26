@@ -1,52 +1,21 @@
 // Background service worker for Doomscroll Detox extension
 
-// Backend API configuration
-const BACKEND_URL = 'http://127.0.0.1:8000';
+// Backend API configuration - disabled for production
+const BACKEND_URL = null; // Set to null to disable backend features
 const API_ENDPOINTS = {
-  events: `${BACKEND_URL}/api/v1/events`,
-  health: `${BACKEND_URL}/health`
+  events: null,
+  health: null
 };
 
 // Helper function to send events to backend
 async function sendEventToBackend(eventData) {
-  try {
-    console.log('📤 Sending event to backend:', eventData);
-    
-    const response = await fetch(API_ENDPOINTS.events, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        events: [eventData]
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    console.log('✅ Event sent successfully:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ Failed to send event to backend:', error);
-    return null;
-  }
+  // Backend disabled for production
+  return null;
 }
 
 // Helper function to check backend health
 async function checkBackendHealth() {
-  try {
-    const response = await fetch(API_ENDPOINTS.health);
-    if (response.ok) {
-      const health = await response.json();
-      console.log('🏥 Backend health check:', health);
-      return true;
-    }
-  } catch (error) {
-    console.error('❌ Backend health check failed:', error);
-  }
+  // Backend disabled for production
   return false;
 }
 
@@ -95,75 +64,15 @@ async function getUserId() {
   });
 }
 
-// Backend settings management
+// Backend settings management - disabled for production
 async function saveSettingsToBackend(settings) {
-  try {
-    const userId = await getUserId();
-    showBackgroundLog(`🌐 Saving settings to backend for user: ${userId}`);
-    showBackgroundLog(`📋 Settings data: ${JSON.stringify(settings)}`);
-    
-    const requestBody = {
-      user_id: userId,
-      daily_limit: settings.dailyLimit || 30,
-      break_reminder: settings.breakReminder || 15,
-      focus_mode_enabled: settings.focusMode || false,
-      focus_sensitivity: settings.focusSensitivity || 'medium',
-      show_overlays: settings.showOverlays !== false,
-      enabled: settings.enabled !== false,
-      monitored_websites: settings.monitoredWebsites || []
-    };
-    
-    showBackgroundLog(`📤 Request body: ${JSON.stringify(requestBody)}`);
-    
-    const response = await fetch(`${BACKEND_URL}/api/v1/users/${userId}/settings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    showBackgroundLog(`📥 Response status: ${response.status}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      showBackgroundLog(`❌ HTTP error ${response.status}: ${errorText}`);
-      return false;
-    }
-    
-    const result = await response.json();
-    showBackgroundLog(`📥 Response data: ${JSON.stringify(result)}`);
-    
-    if (result.success) {
-      showBackgroundLog('✅ Settings saved to backend successfully');
-      return true;
-    } else {
-      showBackgroundLog('❌ Failed to save settings to backend:', result.error);
-      return false;
-    }
-  } catch (error) {
-    showBackgroundLog('❌ Error saving settings to backend:', error.message);
-    return false;
-  }
+  // Backend disabled for production
+  return false;
 }
 
 async function loadSettingsFromBackend() {
-  try {
-    const userId = await getUserId();
-    const response = await fetch(`${BACKEND_URL}/api/v1/users/${userId}/settings`);
-    const result = await response.json();
-    
-    if (result.success) {
-      showBackgroundLog('✅ Settings loaded from backend:', result.settings);
-      return result.settings;
-    } else {
-      showBackgroundLog('❌ Failed to load settings from backend:', result.error);
-      return null;
-    }
-  } catch (error) {
-    showBackgroundLog('❌ Error loading settings from backend:', error);
-    return null;
-  }
+  // Backend disabled for production
+  return null;
 }
 
 // Helper function to show visual logs

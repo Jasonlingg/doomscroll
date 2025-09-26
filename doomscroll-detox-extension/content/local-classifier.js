@@ -143,11 +143,12 @@ class LocalClassifier {
     };
   }
 
-  // Check if AI text analysis is enabled
+  // Check if AI text analysis is enabled (disabled for production)
   async isAiTextAnalysisEnabled() {
     return new Promise((resolve) => {
       chrome.storage.sync.get(['ai_text_analysis_enabled'], (result) => {
-        resolve(result.ai_text_analysis_enabled === true);
+        // Always return false for production - AI text analysis is disabled
+        resolve(false);
       });
     });
   }

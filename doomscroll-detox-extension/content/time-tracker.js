@@ -152,43 +152,10 @@ function loadDailyUsage() {
   });
 }
 
-// Function to sync usage data with backend
+// Function to sync usage data with backend - disabled for production
 async function syncUsageWithBackend() {
-  try {
-    console.log('📤 Syncing usage data with backend...');
-    
-    const stateManager = window.stateManager;
-    const response = await fetch('http://127.0.0.1:8000/api/v1/events', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        events: [{
-          user_id: 'user_123', // This should be the actual user ID
-          event_type: 'usage_sync',
-          domain: window.location.hostname,
-          url: window.location.href,
-          duration: stateManager.getDailyUsage(),
-          extension_version: '1.0.0',
-          browser: 'Chrome',
-          metadata: {
-            daily_limit: stateManager.getCurrentSettings().dailyLimit,
-            break_reminder: stateManager.getCurrentSettings().breakReminder,
-            timestamp: Date.now()
-          }
-        }]
-      })
-    });
-    
-    if (response.ok) {
-      console.log('✅ Usage data synced with backend');
-    } else {
-      console.log('⚠️ Failed to sync with backend, continuing with local storage');
-    }
-  } catch (error) {
-    console.log('⚠️ Backend sync failed, using local storage only:', error);
-  }
+  // Backend disabled for production
+  return;
 }
 
 // Save daily usage to storage with error handling
