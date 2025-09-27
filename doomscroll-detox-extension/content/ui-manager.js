@@ -750,11 +750,11 @@ function transformToSettingsPanel() {
   const dailyLimit = settings.dailyLimit || 30;
   const usagePercentage = Math.min((dailyUsage / dailyLimit) * 100, 100);
   
-  // Create settings panel HTML
-  const settingsHTML = `
-    <div class="floating-settings-header">
-      <h3>⚙️ Settings</h3>
-    </div>
+        // Create settings panel HTML
+        const settingsHTML = `
+          <div class="floating-settings-header">
+            <h3>⚙️ Settings</h3>
+          </div>
     
     <div class="floating-settings-content">
       <div class="floating-stats-section">
@@ -788,17 +788,18 @@ function transformToSettingsPanel() {
       <div class="setting-item">
         <label class="toggle-label">
           <input type="checkbox" id="floating-focus-mode-toggle" ${settings.focusMode ? 'checked' : ''}>
-          <span class="toggle-text">Focus Mode</span>
+          <span class="toggle-text">Hard Lock Mode</span>
           <span class="toggle-slider"></span>
         </label>
+        <p class="floating-setting-description">Completely blocks access to monitored sites with a lock screen</p>
       </div>
       
       <div class="setting-item">
-        <label for="floating-focus-sensitivity">Focus Sensitivity:</label>
+        <label for="floating-focus-sensitivity">Lock Duration:</label>
         <select id="floating-focus-sensitivity">
-          <option value="low" ${settings.focusSensitivity === 'low' ? 'selected' : ''}>Low (60s)</option>
-          <option value="medium" ${settings.focusSensitivity === 'medium' ? 'selected' : ''}>Medium (30s)</option>
-          <option value="high" ${settings.focusSensitivity === 'high' ? 'selected' : ''}>High (15s)</option>
+          <option value="low" ${settings.focusSensitivity === 'low' ? 'selected' : ''}>5 minutes</option>
+          <option value="medium" ${settings.focusSensitivity === 'medium' ? 'selected' : ''}>15 minutes</option>
+          <option value="high" ${settings.focusSensitivity === 'high' ? 'selected' : ''}>30 minutes</option>
         </select>
       </div>
       
@@ -870,7 +871,6 @@ function setupFloatingSettingsListeners() {
       resetTodayUsage();
     });
   }
-  
   
   // Click outside to close
   document.addEventListener('click', (e) => {
@@ -1099,8 +1099,148 @@ function updateFloatingWebsiteSettings(websites) {
   });
 }
 
+// Hard lock mode - completely block access to monitored sites
+function checkHardLockMode() {
+  const stateManager = window.stateManager;
+  if (!stateManager) return;
+  
+  const settings = stateManager.getCurrentSettings();
+  if (!settings.focusMode || !settings.enabled) return;
+  
+  const currentDomain = window.location.hostname;
+  const monitoredWebsites = stateManager.getMonitoredWebsites();
+  
+  // Check if current site is monitored and enabled
+  const isMonitored = monitoredWebsites.some(site => 
+    site.enabled && (currentDomain.includes(site.domain) || site.domain.includes(currentDomain))
+  );
+  
+  if (isMonitored) {
+    showHardLockScreen();
+  }
+}
+
+// Show hard lock screen overlay
+function showHardLockScreen() {
+  // Remove existing lock screen if any
+  const existingLock = document.getElementById('hard-lock-screen');
+  if (existingLock) {
+    existingLock.remove();
+  }
+  
+  const stateManager = window.stateManager;
+  const settings = stateManager.getCurrentSettings();
+  
+  // Calculate lock duration
+  let lockDuration = 5; // default 5 minutes
+  switch(settings.focusSensitivity) {
+    case 'low': lockDuration = 5; break;
+    case 'medium': lockDuration = 15; break;
+    case 'high': lockDuration = 30; break;
+  }
+  
+  // Create lock screen HTML
+  const lockHTML = `
+    <div id="hard-lock-screen" class="hard-lock-overlay">
+      <div class="hard-lock-content">
+        <button id="close-lock-screen" class="close-lock-btn">×</button>
+        <div class="lock-icon">🔒</div>
+        <h2>Site Locked</h2>
+        <p>This site is temporarily blocked by Doomscroll Detox.</p>
+        <p>Lock duration: <strong>${lockDuration} minutes</strong></p>
+        <div class="lock-timer">
+          <div class="timer-circle">
+            <span id="lock-countdown">${lockDuration}:00</span>
+          </div>
+        </div>
+        <p class="lock-message">Take a break and come back later!</p>
+        <button id="emergency-unlock" class="emergency-btn">Emergency Unlock</button>
+      </div>
+    </div>
+  `;
+  
+  // Add to page
+  document.body.insertAdjacentHTML('beforeend', lockHTML);
+  
+  // Start countdown timer
+  startLockCountdown(lockDuration * 60); // Convert to seconds
+  
+  // Add emergency unlock handler
+  const emergencyBtn = document.getElementById('emergency-unlock');
+  emergencyBtn.addEventListener('click', () => {
+    emergencyUnlock();
+  });
+  
+  // Add close button handler
+  const closeBtn = document.getElementById('close-lock-screen');
+  closeBtn.addEventListener('click', () => {
+    closeLockScreen();
+  });
+}
+
+// Start countdown timer
+function startLockCountdown(seconds) {
+  const countdownElement = document.getElementById('lock-countdown');
+  if (!countdownElement) return;
+  
+  const timer = setInterval(() => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    countdownElement.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    
+    seconds--;
+    
+    if (seconds < 0) {
+      clearInterval(timer);
+      unlockSite();
+    }
+  }, 1000);
+}
+
+// Close lock screen
+function closeLockScreen() {
+  const lockScreen = document.getElementById('hard-lock-screen');
+  if (lockScreen) {
+    lockScreen.remove();
+  }
+}
+
+// Emergency unlock
+function emergencyUnlock() {
+  const lockScreen = document.getElementById('hard-lock-screen');
+  if (lockScreen) {
+    lockScreen.remove();
+  }
+  
+  // Disable hard lock mode temporarily
+  chrome.storage.sync.get(['settings'], (result) => {
+    const settings = result.settings || {};
+    settings.focusMode = false;
+    chrome.storage.sync.set({ settings });
+    
+    showToastMessage('Emergency unlock activated. Hard lock disabled.', 'warning');
+  });
+}
+
+// Unlock site when timer expires
+function unlockSite() {
+  const lockScreen = document.getElementById('hard-lock-screen');
+  if (lockScreen) {
+    lockScreen.remove();
+  }
+  
+  showToastMessage('Site unlocked! You can now access this site.', 'success');
+}
+
 // Inject styles immediately when module loads
 injectAllStyles();
+
+// Check hard lock mode when page loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', checkHardLockMode);
+} else {
+  checkHardLockMode();
+}
 
 // Export UI management functions
 window.uiManager = {
