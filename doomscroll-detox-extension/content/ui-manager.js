@@ -130,11 +130,11 @@ function addUsageIndicator() {
   
   indicator.style.background = background;
   
-  // Add click handler for settings button
+  // Add click handler for settings button - transform to settings panel
   const settingsBtn = indicator.querySelector('.settings-btn');
   settingsBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    chrome.runtime.sendMessage({ action: 'openSettings' });
+    transformToSettingsPanel();
   });
   
   document.body.appendChild(indicator);
@@ -734,6 +734,371 @@ function showProductivitySuggestion() {
   });
 }
 
+// Transform floating indicator to settings panel
+function transformToSettingsPanel() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (!indicator) return;
+  
+  console.log('🔄 Transforming indicator to settings panel');
+  
+  // Get current settings
+  const stateManager = window.stateManager;
+  const settings = stateManager.getCurrentSettings();
+  
+  // Get current usage data
+  const dailyUsage = stateManager.getDailyUsage() || 0;
+  const dailyLimit = settings.dailyLimit || 30;
+  const usagePercentage = Math.min((dailyUsage / dailyLimit) * 100, 100);
+  
+  // Create settings panel HTML
+  const settingsHTML = `
+    <div class="floating-settings-header">
+      <h3>⚙️ Settings</h3>
+    </div>
+    
+    <div class="floating-settings-content">
+      <div class="floating-stats-section">
+        <div class="floating-stat-card">
+          <h4>Today's Usage</h4>
+          <div class="floating-stat-value">${Math.floor(dailyUsage)}m</div>
+          <div class="floating-stat-label">of ${dailyLimit}m daily limit</div>
+        </div>
+        <div class="floating-progress-bar">
+          <div class="floating-progress-fill" style="width: ${usagePercentage}%"></div>
+        </div>
+      </div>
+      <div class="setting-item">
+        <label for="floating-daily-limit">Daily Limit (min):</label>
+        <input type="number" id="floating-daily-limit" min="5" max="480" value="${settings.dailyLimit || 30}">
+      </div>
+      
+      <div class="setting-item">
+        <label for="floating-break-reminder">Break Reminder (min):</label>
+        <input type="number" id="floating-break-reminder" min="5" max="60" value="${settings.breakReminder || 15}">
+      </div>
+      
+      <div class="setting-item">
+        <label class="toggle-label">
+          <input type="checkbox" id="floating-enabled-toggle" ${settings.enabled ? 'checked' : ''}>
+          <span class="toggle-text">Extension Enabled</span>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      
+      <div class="setting-item">
+        <label class="toggle-label">
+          <input type="checkbox" id="floating-focus-mode-toggle" ${settings.focusMode ? 'checked' : ''}>
+          <span class="toggle-text">Focus Mode</span>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      
+      <div class="setting-item">
+        <label for="floating-focus-sensitivity">Focus Sensitivity:</label>
+        <select id="floating-focus-sensitivity">
+          <option value="low" ${settings.focusSensitivity === 'low' ? 'selected' : ''}>Low (60s)</option>
+          <option value="medium" ${settings.focusSensitivity === 'medium' ? 'selected' : ''}>Medium (30s)</option>
+          <option value="high" ${settings.focusSensitivity === 'high' ? 'selected' : ''}>High (15s)</option>
+        </select>
+      </div>
+      
+      <div class="setting-item">
+        <label class="toggle-label">
+          <input type="checkbox" id="floating-overlay-toggle" ${settings.showOverlays ? 'checked' : ''}>
+          <span class="toggle-text">Show Overlays (alerts + suggestions)</span>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      
+      <div class="setting-item">
+        <label class="toggle-label">
+          <input type="checkbox" id="floating-ai-text-analysis-toggle" disabled>
+          <span class="toggle-text">AI text analysis (send text to backend)</span>
+          <span class="toggle-slider"></span>
+        </label>
+        <p class="floating-setting-description">AI text analysis is currently disabled for production. Only analysis labels are sent.</p>
+      </div>
+      
+      <div class="setting-item">
+        <h3>Monitored Websites</h3>
+        <p class="section-description">Select which websites to monitor and add your own:</p>
+        <div class="website-list" id="floating-website-list">
+          <!-- Websites will be populated by JavaScript -->
+        </div>
+      </div>
+      
+      <div class="floating-settings-actions">
+        <button id="floating-save-settings" class="btn-primary">Save</button>
+        <button id="floating-reset-today" class="btn-secondary">Reset Today</button>
+      </div>
+    </div>
+  `;
+  
+  // Replace content with settings panel
+  indicator.innerHTML = settingsHTML;
+  
+  // Add settings panel class
+  indicator.classList.add('settings-panel');
+  
+  // Add event listeners
+  setupFloatingSettingsListeners();
+  
+  // Populate website list
+  populateFloatingWebsiteList();
+  
+  console.log('✅ Settings panel created');
+}
+
+// Setup event listeners for floating settings panel
+function setupFloatingSettingsListeners() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (!indicator) return;
+  
+  
+  // Save settings button
+  const saveBtn = indicator.querySelector('#floating-save-settings');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      saveFloatingSettings();
+    });
+  }
+  
+  // Reset today button
+  const resetBtn = indicator.querySelector('#floating-reset-today');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      resetTodayUsage();
+    });
+  }
+  
+  
+  // Click outside to close
+  document.addEventListener('click', (e) => {
+    if (!indicator.contains(e.target) && indicator.classList.contains('settings-panel')) {
+      transformBackToIndicator();
+    }
+  });
+}
+
+// Transform settings panel back to indicator
+function transformBackToIndicator() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (!indicator) return;
+  
+  console.log('🔄 Transforming settings panel back to indicator');
+  
+  // Get current data
+  const stateManager = window.stateManager;
+  const dailyUsage = stateManager.getDailyUsage() || 0;
+  const dailyLimit = stateManager.getCurrentSettings()?.dailyLimit || 30;
+  
+  // Create indicator HTML
+  const indicatorHTML = `
+    <div class="doomscroll-badge">
+      <span class="time-spent">${Math.floor(dailyUsage)}m</span>
+      <span class="daily-limit">/${dailyLimit}m</span>
+    </div>
+    <button class="settings-btn" title="Open Settings">⚡</button>
+  `;
+  
+  // Replace content with indicator
+  indicator.innerHTML = indicatorHTML;
+  
+  // Remove settings panel class
+  indicator.classList.remove('settings-panel');
+  
+  // Re-add settings button click handler
+  const settingsBtn = indicator.querySelector('.settings-btn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      transformToSettingsPanel();
+    });
+  }
+  
+  console.log('✅ Indicator restored');
+}
+
+// Save settings from floating panel
+function saveFloatingSettings() {
+  const indicator = document.getElementById('doomscroll-indicator');
+  if (!indicator) return;
+  
+  // Get form values
+  const dailyLimit = parseInt(indicator.querySelector('#floating-daily-limit').value);
+  const breakReminder = parseInt(indicator.querySelector('#floating-break-reminder').value);
+  const enabled = indicator.querySelector('#floating-enabled-toggle').checked;
+  const focusMode = indicator.querySelector('#floating-focus-mode-toggle').checked;
+  const focusSensitivity = indicator.querySelector('#floating-focus-sensitivity').value;
+  const showOverlays = indicator.querySelector('#floating-overlay-toggle').checked;
+  
+  // Validate inputs
+  if (dailyLimit < 5 || dailyLimit > 480) {
+    showToastMessage('Daily limit must be between 5 and 480 minutes', 'error');
+    return;
+  }
+  
+  if (breakReminder < 5 || breakReminder > 60) {
+    showToastMessage('Break reminder must be between 5 and 60 minutes', 'error');
+    return;
+  }
+  
+  // Save settings via background script
+  const settings = {
+    dailyLimit: dailyLimit,
+    breakReminder: breakReminder,
+    enabled: enabled,
+    focusMode: focusMode,
+    focusSensitivity: focusSensitivity,
+    showOverlays: showOverlays
+  };
+  
+  console.log('💾 Saving floating settings:', settings);
+  
+  // Get current save button
+  const saveBtn = indicator.querySelector('#floating-save-settings');
+  const originalText = saveBtn.textContent;
+  
+  // Change button text to show saving
+  saveBtn.textContent = 'Saving...';
+  saveBtn.disabled = true;
+  
+  chrome.runtime.sendMessage({ action: 'updateSettings', settings: settings }, (response) => {
+    if (response && response.success) {
+      // Show success in button with animation
+      saveBtn.textContent = 'Saved!';
+      saveBtn.style.background = '#10b981';
+      saveBtn.classList.add('save-success');
+      
+      // Remove animation class after animation completes
+      setTimeout(() => {
+        saveBtn.classList.remove('save-success');
+      }, 600);
+      
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        saveBtn.textContent = originalText;
+        saveBtn.style.background = '';
+        saveBtn.disabled = false;
+      }, 2000);
+      
+      // Transform back to indicator after successful save
+      setTimeout(() => {
+        transformBackToIndicator();
+      }, 2000);
+    } else {
+      // Show error in button with animation
+      saveBtn.textContent = 'Error';
+      saveBtn.style.background = '#ef4444';
+      saveBtn.classList.add('save-error');
+      
+      // Remove animation class after animation completes
+      setTimeout(() => {
+        saveBtn.classList.remove('save-error');
+      }, 500);
+      
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        saveBtn.textContent = originalText;
+        saveBtn.style.background = '';
+        saveBtn.disabled = false;
+      }, 2000);
+    }
+  });
+}
+
+// Reset today's usage
+function resetTodayUsage() {
+  chrome.runtime.sendMessage({ action: 'resetTodayUsage' }, (response) => {
+    if (response && response.success) {
+      showToastMessage('Today\'s usage reset successfully!', 'success');
+      // Transform back to indicator after successful reset
+      setTimeout(() => {
+        transformBackToIndicator();
+      }, 1000);
+    } else {
+      showToastMessage('Failed to reset usage', 'error');
+    }
+  });
+}
+
+// Get default websites (exact copy from popup.js)
+function getDefaultWebsites() {
+    return [
+        { domain: 'facebook.com', name: 'Facebook', enabled: true, isDefault: true },
+        { domain: 'twitter.com', name: 'Twitter/X', enabled: true, isDefault: true },
+        { domain: 'x.com', name: 'X (Twitter)', enabled: true, isDefault: true },
+        { domain: 'instagram.com', name: 'Instagram', enabled: true, isDefault: true },
+        { domain: 'tiktok.com', name: 'TikTok', enabled: true, isDefault: true },
+        { domain: 'reddit.com', name: 'Reddit', enabled: true, isDefault: true },
+        { domain: 'youtube.com', name: 'YouTube', enabled: true, isDefault: true },
+        { domain: 'linkedin.com', name: 'LinkedIn', enabled: false, isDefault: true },
+        { domain: 'snapchat.com', name: 'Snapchat', enabled: false, isDefault: true }
+    ];
+}
+
+// Load website list in the UI (exact copy from popup.js)
+function populateFloatingWebsiteList() {
+    const websiteList = document.getElementById('floating-website-list');
+    if (!websiteList) return;
+    
+    // Get websites from storage
+    chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+        const websites = result.monitoredWebsites || getDefaultWebsites();
+        
+        websiteList.innerHTML = '';
+        
+        websites.forEach((website, index) => {
+            const websiteItem = document.createElement('div');
+            websiteItem.className = 'website-item';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'website-checkbox';
+            checkbox.checked = website.enabled;
+            checkbox.id = `website-${index}`;
+            
+            const label = document.createElement('label');
+            label.className = 'website-label';
+            label.htmlFor = `website-${index}`;
+            label.textContent = website.name;
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-website';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove website';
+            
+            // Only show remove button for custom websites
+            if (!website.isDefault) {
+                removeBtn.style.display = 'inline-block';
+                removeBtn.addEventListener('click', () => removeWebsite(website.domain));
+            } else {
+                removeBtn.style.display = 'none';
+            }
+            
+            // Add event listener for checkbox changes
+            checkbox.addEventListener('change', () => {
+                console.log('🔄 Website checkbox changed:', website.name, 'enabled:', checkbox.checked);
+                website.enabled = checkbox.checked;
+                updateFloatingWebsiteSettings(websites);
+            });
+            
+            websiteItem.appendChild(checkbox);
+            websiteItem.appendChild(label);
+            websiteItem.appendChild(removeBtn);
+            websiteList.appendChild(websiteItem);
+        });
+    });
+}
+
+
+// Update website settings
+function updateFloatingWebsiteSettings(websites) {
+  chrome.storage.sync.set({ monitoredWebsites: websites }, () => {
+    console.log('✅ Website settings updated');
+  });
+}
+
 // Inject styles immediately when module loads
 injectAllStyles();
 
@@ -749,5 +1114,9 @@ window.uiManager = {
   showToastMessage: showToastMessage,
   showPrivacyNotice: showPrivacyNotice,
   showProductivitySuggestion: showProductivitySuggestion,
-  injectAllStyles: injectAllStyles
+  injectAllStyles: injectAllStyles,
+  transformToSettingsPanel: transformToSettingsPanel,
+  transformBackToIndicator: transformBackToIndicator,
+  saveFloatingSettings: saveFloatingSettings,
+  resetTodayUsage: resetTodayUsage
 };

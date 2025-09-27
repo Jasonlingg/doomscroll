@@ -339,6 +339,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
+  if (request.action === 'resetTodayUsage') {
+    showBackgroundLog('🔄 Reset today usage requested from floating settings...');
+    chrome.storage.sync.set({ 
+      lastReset: Date.now(), 
+      dailyUsage: 0 
+    }, () => {
+      showBackgroundLog('✅ Today usage reset completed');
+      
+      // Notify all content scripts
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.url && isSocialMediaSite(tab.url)) {
+            chrome.tabs.sendMessage(tab.id, { action: 'resetDailyUsage' }).catch(() => {
+              // Ignore errors if content script not ready
+            });
+          }
+        });
+      });
+      
+      sendResponse({ success: true, message: 'Today\'s usage reset successfully' });
+    });
+    return true;
+  }
+  
   if (request.action === 'openSettings') {
     showBackgroundLog('⚙️ Opening settings popup...');
     chrome.action.openPopup();
