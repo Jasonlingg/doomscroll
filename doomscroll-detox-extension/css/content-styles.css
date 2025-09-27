@@ -436,59 +436,29 @@
     border-bottom: none !important;
 }
 
+/* Standard checkbox styling */
 input[type="checkbox"].website-checkbox,
 .website-checkbox,
 #floating-website-list input[type="checkbox"] {
     margin-right: 12px !important;
-    transform: scale(1.1) !important;
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    -moz-appearance: none !important;
-    width: 36px !important;
-    height: 20px !important;
-    background: #d1d5db !important;
-    border-radius: 10px !important;
+    width: 18px !important;
+    height: 18px !important;
     cursor: pointer !important;
-    position: relative !important;
-    transition: background 0.3s ease !important;
-    border: none !important;
-    outline: none !important;
+    accent-color: #8b5cf6 !important;
 }
 
-input[type="checkbox"].website-checkbox:checked,
-.website-checkbox:checked,
-#floating-website-list input[type="checkbox"]:checked {
-    background: #8b5cf6 !important;
-}
-
-input[type="checkbox"].website-checkbox::after,
-.website-checkbox::after,
-#floating-website-list input[type="checkbox"]::after {
-    content: "" !important;
-    position: absolute !important;
-    top: 2px !important;
-    left: 2px !important;
-    width: 16px !important;
-    height: 16px !important;
-    background: white !important;
-    border-radius: 50% !important;
-    transition: transform 0.3s ease !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
-}
-
-input[type="checkbox"].website-checkbox:checked::after,
-.website-checkbox:checked::after,
-#floating-website-list input[type="checkbox"]:checked::after {
-    transform: translateX(16px) !important;
-}
 
 #floating-website-list label,
 .floating-settings-content label,
 .website-label {
+    display: flex !important;
+    align-items: center !important;
     color: #333333 !important;
     background: transparent !important;
     font-size: 14px !important;
     font-weight: normal !important;
+    cursor: pointer !important;
+    width: 100% !important;
 }
 
 .website-label:hover {

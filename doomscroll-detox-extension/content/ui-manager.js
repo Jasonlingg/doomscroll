@@ -1083,6 +1083,12 @@ function populateFloatingWebsiteList() {
                 updateFloatingWebsiteSettings(websites);
             });
             
+            // Add click event listener as backup
+            checkbox.addEventListener('click', (e) => {
+                console.log('🖱️ Website checkbox clicked:', website.name);
+                e.stopPropagation();
+            });
+            
             websiteItem.appendChild(checkbox);
             websiteItem.appendChild(label);
             websiteItem.appendChild(removeBtn);
