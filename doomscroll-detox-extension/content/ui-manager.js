@@ -645,6 +645,9 @@ function injectAllStyles() {
     document.head.appendChild(style);
     console.log('✅ All Doomscroll styles injected immediately');
   }
+  
+  // Add glass/blur visual styles for indicator and settings
+  injectGlassStyles();
 }
 
 // Show damage animation on the indicator
@@ -664,6 +667,75 @@ function showDamageAnimationOnIndicator() {
     indicator.classList.remove('damage-animation');
     console.log('✅ Damage animation completed');
   }, 800);
+}
+
+// Inject glass (liquid) styles for indicator and settings panel
+function injectGlassStyles() {
+  if (document.getElementById('doomscroll-glass-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'doomscroll-glass-styles';
+  style.textContent = `
+    /* Floating indicator glass treatment */
+    #doomscroll-indicator {
+      backdrop-filter: saturate(160%) blur(14px) !important;
+      -webkit-backdrop-filter: saturate(160%) blur(14px) !important;
+      background: rgba(255, 255, 255, 0.06) !important; /* more transparent */
+      border: 1px solid rgba(255, 255, 255, 0.28) !important;
+    }
+    /* Preserve paused grey override */
+    #doomscroll-indicator.hard-lock-paused:not(.settings-panel) {
+      backdrop-filter: saturate(120%) blur(10px) !important;
+      -webkit-backdrop-filter: saturate(120%) blur(10px) !important;
+    }
+    /* Settings panel glass */
+    #doomscroll-indicator.settings-panel {
+      background: rgba(255, 255, 255, 0.3) !important;
+      backdrop-filter: saturate(170%) blur(22px) !important;
+      -webkit-backdrop-filter: saturate(170%) blur(22px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.38) !important;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.18) !important;
+      color: rgba(255, 255, 255, 0.96) !important; /* lighter text */
+    }
+    /* Settings inner elements subtle glass */
+    #doomscroll-indicator.settings-panel .floating-stat-card,
+    #doomscroll-indicator.settings-panel .floating-settings-header {
+      background: rgba(255, 255, 255, 0.38) !important;
+      border: 0 !important;
+      border-radius: 12px !important;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08) inset, 0 1px 0 rgba(255,255,255,0.35) !important;
+    }
+    /* Make individual setting rows transparent */
+    #doomscroll-indicator.settings-panel .setting-item {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    #doomscroll-indicator.settings-panel .floating-settings-content {
+      background: transparent !important;
+    }
+    /* Lighter text across settings */
+    #doomscroll-indicator.settings-panel h3,
+    #doomscroll-indicator.settings-panel h4,
+    #doomscroll-indicator.settings-panel label,
+    #doomscroll-indicator.settings-panel .floating-stat-value,
+    #doomscroll-indicator.settings-panel .floating-stat-label,
+    #doomscroll-indicator.settings-panel .section-description,
+    #doomscroll-indicator.settings-panel .website-name,
+    #doomscroll-indicator.settings-panel .website-domain {
+      color: rgba(255, 255, 255, 0.95) !important;
+    }
+    #doomscroll-indicator.settings-panel input,
+    #doomscroll-indicator.settings-panel select,
+    #doomscroll-indicator.settings-panel button {
+      color: rgba(255, 255, 255, 0.98) !important;
+    }
+    #doomscroll-indicator.settings-panel input::placeholder { color: rgba(255,255,255,0.7) !important; }
+    
+    /* Indicator numbers lighter */
+    #doomscroll-indicator .doomscroll-badge .time-spent,
+    #doomscroll-indicator .doomscroll-badge .daily-limit { color: rgba(255,255,255,0.97) !important; }
+  `;
+  document.head.appendChild(style);
 }
 
 // Show break reminder
