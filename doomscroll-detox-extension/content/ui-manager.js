@@ -50,6 +50,177 @@ function removeLoadingState() {
   }
 }
 
+// Minimal hard lock: hide page content but keep indicator visible with settings access
+function enforceMinimalHardLock() {
+  // Ensure indicator exists
+  const indicator = document.getElementById('doomscroll-indicator') || createOrGetIndicator();
+  if (!indicator) return;
+  
+  // Pause time tracking while in hard lock
+  try {
+    const stateManager = window.stateManager;
+    if (stateManager) {
+      stateManager.setIsActive(false);
+      // Visually mark indicator as paused
+      indicator.classList.add('hard-lock-paused');
+      // Keep UI consistent
+      window.uiManager.updateUsageIndicator(stateManager.getDailyUsage(), stateManager.getCurrentSettings().dailyLimit, false);
+    }
+  } catch (e) {
+    // no-op
+  }
+  
+  // Create an overlay container if not present
+  let overlay = document.getElementById('minimal-hard-lock-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'minimal-hard-lock-overlay';
+    overlay.style.cssText = `
+      position: fixed !important;
+      inset: 0 !important;
+      background: rgba(0,0,0,0.08) !important;
+      backdrop-filter: blur(1px) !important;
+      z-index: 99998 !important;
+      pointer-events: auto !important; /* capture clicks to block page */
+    `;
+    document.body.appendChild(overlay);
+  }
+  
+  // Create a centered lock message card if not present
+  if (!document.getElementById('minimal-hard-lock-message')) {
+    const lockMsg = document.createElement('div');
+    lockMsg.id = 'minimal-hard-lock-message';
+    lockMsg.innerHTML = `
+      <div class="hard-lock-card">
+        <div class="hard-lock-icon">🔒</div>
+        <h2 class="hard-lock-title">You're locked from this site</h2>
+        <p class="hard-lock-subtitle">Hard Lock is enabled. Take a short break.</p>
+        <div class="hard-lock-actions">
+          <button id="hard-lock-open-settings" class="btn-animated">Open Settings</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(lockMsg);
+    const openBtn = lockMsg.querySelector('#hard-lock-open-settings');
+    if (openBtn) {
+      openBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const indicatorEl = document.getElementById('doomscroll-indicator');
+        if (indicatorEl && !indicatorEl.classList.contains('settings-panel')) {
+          transformToSettingsPanel();
+        }
+      });
+    }
+  }
+  
+  // Hide all content except the indicator
+  document.documentElement.classList.add('doomscroll-minimal-hard-lock');
+  injectMinimalHardLockStyles();
+  
+  // Disable page scrolling
+  if (!document.documentElement.hasAttribute('data-hard-lock-scroll')) {
+    document.documentElement.setAttribute('data-hard-lock-scroll', 'disabled');
+    document.documentElement.style.overflow = 'hidden';
+  }
+}
+
+function removeMinimalHardLock() {
+  const overlay = document.getElementById('minimal-hard-lock-overlay');
+  if (overlay) overlay.remove();
+  const lockMsg = document.getElementById('minimal-hard-lock-message');
+  if (lockMsg) lockMsg.remove();
+  document.documentElement.classList.remove('doomscroll-minimal-hard-lock');
+  
+  // Re-enable page scrolling
+  if (document.documentElement.getAttribute('data-hard-lock-scroll') === 'disabled') {
+    document.documentElement.removeAttribute('data-hard-lock-scroll');
+    document.documentElement.style.overflow = '';
+  }
+  
+  // Resume time tracking and restore indicator visuals
+  try {
+    const stateManager = window.stateManager;
+    if (stateManager) {
+      const indicator = document.getElementById('doomscroll-indicator');
+      if (indicator) indicator.classList.remove('hard-lock-paused');
+      stateManager.setIsActive(true);
+      // Reset session timing so we don't double count within current minute
+      stateManager.setSessionStartTime(Date.now());
+      stateManager.setLastMinuteCompleted(0);
+      window.uiManager.updateUsageIndicator(stateManager.getDailyUsage(), stateManager.getCurrentSettings().dailyLimit, false);
+    }
+  } catch (e) {
+    // no-op
+  }
+}
+
+function injectMinimalHardLockStyles() {
+  if (document.getElementById('minimal-hard-lock-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'minimal-hard-lock-styles';
+  style.textContent = `
+    .doomscroll-minimal-hard-lock body > *:not(#doomscroll-indicator):not(#minimal-hard-lock-overlay),
+    .doomscroll-minimal-hard-lock html > *:not(body):not(head):not(#doomscroll-indicator):not(#minimal-hard-lock-overlay) {
+      visibility: hidden !important;
+    }
+    /* Lock message container */
+    #minimal-hard-lock-message {
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      z-index: 99999 !important;
+      pointer-events: auto !important;
+    }
+    .hard-lock-card {
+      background: rgba(255,255,255,0.96) !important;
+      border-radius: 16px !important;
+      padding: 28px 24px !important;
+      width: 92vw !important;
+      max-width: 420px !important;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.18) !important;
+      border: 1px solid rgba(0,0,0,0.06) !important;
+      text-align: center !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      backdrop-filter: blur(6px) !important;
+    }
+    .hard-lock-icon { font-size: 44px !important; margin-bottom: 8px !important; }
+    .hard-lock-title { font-size: 20px !important; margin: 6px 0 !important; color: #111827 !important; }
+    .hard-lock-subtitle { font-size: 14px !important; margin: 0 0 16px 0 !important; color: #6b7280 !important; }
+    .hard-lock-actions { display: flex !important; justify-content: center !important; }
+    #hard-lock-open-settings { min-width: 160px !important; }
+
+    /* Keep the overlay clickable to block interactions */
+    #minimal-hard-lock-overlay { cursor: not-allowed !important; }
+
+    /* Ensure indicator remains interactive above overlay */
+    #doomscroll-indicator { pointer-events: auto !important; }
+    #doomscroll-indicator {
+      position: fixed !important;
+      top: 16px !important;
+      right: 16px !important;
+      z-index: 99999 !important;
+    }
+    /* Grey style only when NOT showing settings panel */
+    #doomscroll-indicator.hard-lock-paused:not(.settings-panel) {
+      background: linear-gradient(135deg, #9ca3af 0%, #9ca3af 100%) !important; /* gray */
+      border: 1px solid rgba(0, 0, 0, 0.15) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+      filter: grayscale(25%);
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function createOrGetIndicator() {
+  let indicator = document.getElementById('doomscroll-indicator');
+  if (!indicator) {
+    addUsageIndicator();
+    indicator = document.getElementById('doomscroll-indicator');
+  }
+  return indicator;
+}
+
 // Function to force update the usage indicator
 function forceUpdateIndicator() {
   const stateManager = window.stateManager;
@@ -236,6 +407,15 @@ function updateUsageIndicator(timeSpent, dailyLimit, showDamageAnimation = false
 
 // Inject all CSS styles immediately when the module loads
 function injectAllStyles() {
+  // Inject Font Awesome for floating settings checkboxes
+  if (!document.getElementById('font-awesome')) {
+    const fontAwesome = document.createElement('link');
+    fontAwesome.id = 'font-awesome';
+    fontAwesome.rel = 'stylesheet';
+    fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+    document.head.appendChild(fontAwesome);
+  }
+  
   if (!document.getElementById('doomscroll-styles')) {
     const style = document.createElement('style');
     style.id = 'doomscroll-styles';
@@ -308,6 +488,70 @@ function injectAllStyles() {
         90% { transform: scale(1.02); filter: brightness(1.35); }
         100% { transform: scale(1); filter: brightness(1.4); }
       }
+      
+        /* Simple purple checkboxes for floating settings */
+        .website-item {
+          display: flex;
+          align-items: center;
+          padding: 12px 16px;
+          border-bottom: 1px solid #e9ecef;
+          transition: all 0.3s ease;
+        }
+
+        .website-item:last-child {
+          border-bottom: none;
+        }
+
+        .website-item:hover {
+          background: rgba(139, 92, 246, 0.05);
+        }
+
+        .website-info {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          margin-left: 12px;
+        }
+
+        .website-name {
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+          margin-bottom: 2px;
+        }
+
+        .website-domain {
+          font-size: 12px;
+          color: #666;
+        }
+
+        .website-checkbox {
+          position: relative;
+          width: 20px;
+          height: 20px;
+          border: 2px solid #8b5cf6;
+          border-radius: 4px;
+          background: white;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .website-checkbox.checked {
+          background: #8b5cf6;
+          border-color: #8b5cf6;
+        }
+
+        .website-checkbox.checked::after {
+          content: '\\f00c';
+          font-family: 'Font Awesome 6 Free';
+          font-weight: 900;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          color: white;
+          font-size: 12px;
+        }
       
       /* Alert animations */
       @keyframes alertSlideIn {
@@ -1046,52 +1290,44 @@ function populateFloatingWebsiteList() {
     chrome.storage.sync.get(['monitoredWebsites'], (result) => {
         const websites = result.monitoredWebsites || getDefaultWebsites();
         
+        // Simple website list for floating settings
+        const websiteIcons = {
+            'youtube.com': { name: 'YouTube' },
+            'instagram.com': { name: 'Instagram' },
+            'x.com': { name: 'X (Twitter)' },
+            'twitter.com': { name: 'X (Twitter)' },
+            'reddit.com': { name: 'Reddit' },
+            'linkedin.com': { name: 'LinkedIn' },
+            'tiktok.com': { name: 'TikTok' },
+            'snapchat.com': { name: 'Snapchat' },
+            'facebook.com': { name: 'Facebook' }
+        };
+        
         websiteList.innerHTML = '';
         
         websites.forEach((website, index) => {
             const websiteItem = document.createElement('div');
             websiteItem.className = 'website-item';
             
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'website-checkbox';
-            checkbox.checked = website.enabled;
-            checkbox.id = `website-${index}`;
+            // Get display name
+            const displayName = websiteIcons[website.domain]?.name || website.name;
             
-            const label = document.createElement('label');
-            label.className = 'website-label';
-            label.htmlFor = `website-${index}`;
-            label.textContent = website.name;
+            websiteItem.innerHTML = `
+                <div class="website-checkbox ${website.enabled ? 'checked' : ''}" data-index="${index}"></div>
+                <div class="website-info">
+                    <div class="website-name">${displayName}</div>
+                    <div class="website-domain">${website.domain}</div>
+                </div>
+            `;
             
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'remove-website';
-            removeBtn.textContent = '×';
-            removeBtn.title = 'Remove website';
-            
-            // Only show remove button for custom websites
-            if (!website.isDefault) {
-                removeBtn.style.display = 'inline-block';
-                removeBtn.addEventListener('click', () => removeWebsite(website.domain));
-            } else {
-                removeBtn.style.display = 'none';
-            }
-            
-            // Add event listener for checkbox changes
-            checkbox.addEventListener('change', () => {
-                console.log('🔄 Website checkbox changed:', website.name, 'enabled:', checkbox.checked);
-                website.enabled = checkbox.checked;
+            // Add event listener for checkbox
+            const checkbox = websiteItem.querySelector('.website-checkbox');
+            checkbox.addEventListener('click', () => {
+                website.enabled = !website.enabled;
+                checkbox.classList.toggle('checked', website.enabled);
                 updateFloatingWebsiteSettings(websites);
             });
             
-            // Add click event listener as backup
-            checkbox.addEventListener('click', (e) => {
-                console.log('🖱️ Website checkbox clicked:', website.name);
-                e.stopPropagation();
-            });
-            
-            websiteItem.appendChild(checkbox);
-            websiteItem.appendChild(label);
-            websiteItem.appendChild(removeBtn);
             websiteList.appendChild(websiteItem);
         });
     });
@@ -1111,112 +1347,50 @@ function checkHardLockMode() {
   if (!stateManager) return;
   
   const settings = stateManager.getCurrentSettings();
-  if (!settings.focusMode || !settings.enabled) return;
+  if (!settings.focusMode || !settings.enabled) {
+    removeMinimalHardLock();
+    return;
+  }
   
   const currentDomain = window.location.hostname;
-  const monitoredWebsites = stateManager.getMonitoredWebsites();
-  
-  // Check if current site is monitored and enabled
-  const isMonitored = monitoredWebsites.some(site => 
-    site.enabled && (currentDomain.includes(site.domain) || site.domain.includes(currentDomain))
-  );
-  
-  if (isMonitored) {
-    showHardLockScreen();
-  }
+  // Read monitored websites from storage (fallback to defaults)
+  chrome.storage.sync.get(['monitoredWebsites'], (result) => {
+    const monitoredWebsites = result.monitoredWebsites || getDefaultWebsites();
+    
+    // Check if current site is monitored and enabled
+    const isMonitored = monitoredWebsites.some(site => 
+      site && site.enabled && (
+        (typeof site.domain === 'string' && (currentDomain.includes(site.domain) || site.domain.includes(currentDomain)))
+      )
+    );
+    
+    if (isMonitored) {
+      enforceMinimalHardLock();
+    } else {
+      removeMinimalHardLock();
+    }
+  });
 }
 
 // Show hard lock screen overlay
 function showHardLockScreen() {
-  // Remove existing lock screen if any
-  const existingLock = document.getElementById('hard-lock-screen');
-  if (existingLock) {
-    existingLock.remove();
-  }
-  
-  const stateManager = window.stateManager;
-  const settings = stateManager.getCurrentSettings();
-  
-  // Calculate lock duration
-  let lockDuration = 5; // default 5 minutes
-  switch(settings.focusSensitivity) {
-    case 'low': lockDuration = 5; break;
-    case 'medium': lockDuration = 15; break;
-    case 'high': lockDuration = 30; break;
-  }
-  
-  // Create lock screen HTML
-  const lockHTML = `
-    <div id="hard-lock-screen" class="hard-lock-overlay">
-      <div class="hard-lock-content">
-        <button id="close-lock-screen" class="close-lock-btn">×</button>
-        <div class="lock-icon">🔒</div>
-        <h2>Site Locked</h2>
-        <p>This site is temporarily blocked by Doomscroll Detox.</p>
-        <p>Lock duration: <strong>${lockDuration} minutes</strong></p>
-        <div class="lock-timer">
-          <div class="timer-circle">
-            <span id="lock-countdown">${lockDuration}:00</span>
-          </div>
-        </div>
-        <p class="lock-message">Take a break and come back later!</p>
-        <button id="emergency-unlock" class="emergency-btn">Emergency Unlock</button>
-      </div>
-    </div>
-  `;
-  
-  // Add to page
-  document.body.insertAdjacentHTML('beforeend', lockHTML);
-  
-  // Start countdown timer
-  startLockCountdown(lockDuration * 60); // Convert to seconds
-  
-  // Add emergency unlock handler
-  const emergencyBtn = document.getElementById('emergency-unlock');
-  emergencyBtn.addEventListener('click', () => {
-    emergencyUnlock();
-  });
-  
-  // Add close button handler
-  const closeBtn = document.getElementById('close-lock-screen');
-  closeBtn.addEventListener('click', () => {
-    closeLockScreen();
-  });
+  // Deprecated full-screen lock; use minimal lock that keeps indicator visible
+  enforceMinimalHardLock();
 }
 
 // Start countdown timer
 function startLockCountdown(seconds) {
-  const countdownElement = document.getElementById('lock-countdown');
-  if (!countdownElement) return;
-  
-  const timer = setInterval(() => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    countdownElement.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    
-    seconds--;
-    
-    if (seconds < 0) {
-      clearInterval(timer);
-      unlockSite();
-    }
-  }, 1000);
+  // No-op for minimal hard lock mode
 }
 
 // Close lock screen
 function closeLockScreen() {
-  const lockScreen = document.getElementById('hard-lock-screen');
-  if (lockScreen) {
-    lockScreen.remove();
-  }
+  removeMinimalHardLock();
 }
 
 // Emergency unlock
 function emergencyUnlock() {
-  const lockScreen = document.getElementById('hard-lock-screen');
-  if (lockScreen) {
-    lockScreen.remove();
-  }
+  removeMinimalHardLock();
   
   // Disable hard lock mode temporarily
   chrome.storage.sync.get(['settings'], (result) => {
@@ -1230,12 +1404,7 @@ function emergencyUnlock() {
 
 // Unlock site when timer expires
 function unlockSite() {
-  const lockScreen = document.getElementById('hard-lock-screen');
-  if (lockScreen) {
-    lockScreen.remove();
-  }
-  
-  showToastMessage('Site unlocked! You can now access this site.', 'success');
+  removeMinimalHardLock();
 }
 
 // Inject styles immediately when module loads
@@ -1247,6 +1416,14 @@ if (document.readyState === 'loading') {
 } else {
   checkHardLockMode();
 }
+
+// Re-evaluate lock when monitored websites or settings change
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace !== 'sync') return;
+  if (changes.monitoredWebsites || changes.focusMode || changes.enabled) {
+    checkHardLockMode();
+  }
+});
 
 // Export UI management functions
 window.uiManager = {
@@ -1264,5 +1441,8 @@ window.uiManager = {
   transformToSettingsPanel: transformToSettingsPanel,
   transformBackToIndicator: transformBackToIndicator,
   saveFloatingSettings: saveFloatingSettings,
-  resetTodayUsage: resetTodayUsage
+  resetTodayUsage: resetTodayUsage,
+  checkHardLockMode: checkHardLockMode,
+  enforceMinimalHardLock: enforceMinimalHardLock,
+  removeMinimalHardLock: removeMinimalHardLock
 };

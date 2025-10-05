@@ -516,44 +516,52 @@ function loadWebsiteList(websites) {
     
     websiteList.innerHTML = '';
     
+    // Website icon mapping with emoji and modern styling
+    const websiteIcons = {
+        'youtube.com': { emoji: '📺', class: 'youtube', color: '#ff0000' },
+        'instagram.com': { emoji: '📷', class: 'instagram', color: '#e4405f' },
+        'x.com': { emoji: '🐦', class: 'x', color: '#000000' },
+        'twitter.com': { emoji: '🐦', class: 'x', color: '#000000' },
+        'reddit.com': { emoji: '🔴', class: 'reddit', color: '#ff4500' },
+        'linkedin.com': { emoji: '💼', class: 'linkedin', color: '#0077b5' },
+        'tiktok.com': { emoji: '🎵', class: 'tiktok', color: '#000000' },
+        'snapchat.com': { emoji: '👻', class: 'snapchat', color: '#fffc00' },
+        'facebook.com': { emoji: '👥', class: 'facebook', color: '#1877f2' }
+    };
+    
     websites.forEach((website, index) => {
         const websiteItem = document.createElement('div');
         websiteItem.className = 'website-item';
         
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'website-checkbox';
-        checkbox.checked = website.enabled;
-        checkbox.id = `website-${index}`;
+        // Get icon info
+        const iconInfo = websiteIcons[website.domain] || { emoji: '🌐', class: 'default', color: '#8b5cf6' };
         
-        const label = document.createElement('label');
-        label.className = 'website-label';
-        label.htmlFor = `website-${index}`;
-        label.textContent = website.name;
+        websiteItem.innerHTML = `
+            <div class="website-icon ${iconInfo.class}" style="background: ${iconInfo.color}20; border: 2px solid ${iconInfo.color}40;">
+                <span class="website-emoji">${iconInfo.emoji}</span>
+            </div>
+            <div class="website-info">
+                <div class="website-name">${website.name}</div>
+                <div class="website-domain">${website.domain}</div>
+            </div>
+            <div class="website-toggle ${website.enabled ? 'active' : ''}" data-index="${index}"></div>
+            ${!website.isDefault ? `<button class="remove-website" data-domain="${website.domain}">×</button>` : ''}
+        `;
         
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'remove-website';
-        removeBtn.textContent = '×';
-        removeBtn.title = 'Remove website';
-        
-        // Only show remove button for custom websites
-        if (!website.isDefault) {
-            removeBtn.style.display = 'inline-block';
-            removeBtn.addEventListener('click', () => removeWebsite(website.domain));
-        } else {
-            removeBtn.style.display = 'none';
-        }
-        
-        // Add event listener for checkbox changes
-        checkbox.addEventListener('change', () => {
-            console.log('🔄 Website checkbox changed:', website.name, 'enabled:', checkbox.checked);
-            website.enabled = checkbox.checked;
+        // Add event listener for toggle
+        const toggle = websiteItem.querySelector('.website-toggle');
+        toggle.addEventListener('click', () => {
+            website.enabled = !website.enabled;
+            toggle.classList.toggle('active', website.enabled);
             updateWebsiteSettings(websites);
         });
         
-        websiteItem.appendChild(checkbox);
-        websiteItem.appendChild(label);
-        websiteItem.appendChild(removeBtn);
+        // Add event listener for remove button (if not default)
+        if (!website.isDefault) {
+            const removeBtn = websiteItem.querySelector('.remove-website');
+            removeBtn.addEventListener('click', () => removeWebsite(website.domain));
+        }
+        
         websiteList.appendChild(websiteItem);
     });
 }

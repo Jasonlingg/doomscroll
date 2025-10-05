@@ -216,7 +216,7 @@ function init() {
         window.uiManager.waitForDataAndUpdate();
         
         if (focusMode) {
-          window.focusMode.startFocusMode();
+          window.uiManager && window.uiManager.checkHardLockMode && window.uiManager.checkHardLockMode();
         }
         
         document.addEventListener('visibilitychange', window.timeTracker.handleVisibilityChange);
@@ -303,9 +303,9 @@ function loadSettingsFromBackend() {
         // Wait for data to be populated before removing loading state
         window.uiManager.waitForDataAndUpdate();
         
-        // Start focus mode if enabled
+        // Enforce hard lock if enabled
         if (focusMode) {
-          window.focusMode.startFocusMode();
+          window.uiManager && window.uiManager.checkHardLockMode && window.uiManager.checkHardLockMode();
         }
         
         // Listen for page visibility changes
@@ -381,9 +381,9 @@ function loadSettingsFromBackend() {
           // Wait for data to be populated before removing loading state
           window.uiManager.waitForDataAndUpdate();
           
-          // Start focus mode if enabled
+          // Enforce hard lock if enabled
           if (focusMode) {
-            window.focusMode.startFocusMode();
+            window.uiManager && window.uiManager.checkHardLockMode && window.uiManager.checkHardLockMode();
           }
           
           // Listen for page visibility changes
